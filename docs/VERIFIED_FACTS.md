@@ -93,3 +93,14 @@ environment, so anything that only those sites would confirm is marked **UNVERIF
 ## Scaffold fixes applied
 - `scaffold.config.ts` used `chains.monad_testnet`, which does not exist in viem 2.31.1. The export is `monadTestnet`. Unfixed, `targetNetworks` would contain `undefined` at runtime.
 - `hooks/scaffold-eth/useTransactor.tsx` had a strict-mode type error, fixed without changing behavior.
+
+## Phase 3 additions
+- The market-data WebSocket `wss://testnet.perpl.xyz/ws/v1/market-data` is public and allows 16 subscriptions and 10 requests/min per connection.
+  - `market-state@<chainId>` (mt 9) carries oracle, mark, last, mid, bid, ask, 24h price, OI and TVL, with prices scaled by `price_decimals`.
+  - `heartbeat@<chainId>` (mt 100) has a strictly +1 `sn`.
+  - The trading stream (positions, fills) needs an API key, which needs Perpl to whitelist the enrollment Origin. Not used; positions are read on-chain.
+- REST `PositionType` is 1 Long / 2 Short. The **on-chain** `PositionEnum` values are undocumented.
+- Exchange event signatures come from `solc --combined-json abi interfaces/IExchangeEvents.sol`. `PositionOpened`, `PositionIncreased` and others have `V2` variants; which one the live Exchange emits is unverified, so the indexer handles both.
+- Perpl event params are not `indexed`. HyperSync cannot filter by account, so the indexer filters in its handlers against factory-created accounts.
+- `maintenance_margin` / `initial_margin` in `/v1/pub/context`: the docs say "hundredths" but give `2000 = 5%` and `1000 = 10%`. `fraction = 100 / raw` fits both examples; that is an inference.
+- The Envio CLI 3.12.1 HyperSync chain table includes `monad-testnet` (read from the native binary). HyperSync requires an `ENVIO_API_TOKEN`.

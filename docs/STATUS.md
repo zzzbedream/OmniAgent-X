@@ -35,4 +35,30 @@ yarn start                                                           # PWA on :3
 - No close orders. `PositionEnum` values are unverified, so the long/short side of an open position cannot be read reliably.
 - The `/operator/consent` endpoint has no auth; anyone can request consent for any owner. Harmless on testnet (the owner still has to call the factory), but not acceptable for mainnet.
 - The daily LLM cap is per process and in memory.
-- The dashboard (Phase 3) and vault + CRE (Phase 2) have not started.
+- The vault + CRE (Phase 2) has not started.
+
+## Phase 3: risk dashboard (code complete, not yet on live data)
+
+| Piece | Where | Verified here |
+|---|---|---|
+| Market-data WebSocket protocol, context summary | `packages/core/src/perpl/marketData.ts` | tests on the documented message shapes |
+| On-chain positions (`getPosition`, selector `0x751de421` = solc) | `packages/core/src/perpl/positions.ts` | ABI selector test |
+| Risk metrics (PnL, effective leverage, margin buffer, est. liquidation price) | `packages/core/src/risk/metrics.ts` | liquidation price checked against its defining equation |
+| Envio indexer: factory accounts, deposits, orders, fills, position lifecycle, side calibration | `packages/indexer` | `envio codegen` + 4 tests on simulated events; a mutation test showed the tests catch a side-mapping bug |
+| `/dashboard` (markets live, account, positions, agent log, indexed history) | `packages/nextjs/app/dashboard` | build; rendered in Chromium with offline degradation and with a mocked Perpl WS (values checked by hand) |
+
+### Phase 3 caveats
+- **Position side.** The on-chain `PositionEnum` is undocumented. The indexer learns it from `OrderRequest` (verified order enum) plus the position event in the same transaction. Without the indexer, the dashboard shows the raw value and no PnL.
+- **Estimates only.** PnL, margin buffer and liquidation price ignore funding and fees, and Perpl's margin formula is not public. The maintenance fraction is `100 / maintenance_margin`, inferred from the two examples in Perpl's docs.
+- **Entry price after an increase.** The event does not carry the exchange's average entry price, so the indexer keeps the first entry. On-chain `getPosition` is the source the dashboard uses.
+- **What `getPosition` returns for a market with no position** (empty struct vs revert) is undocumented; both cases are handled.
+- **Envio needs `ENVIO_API_TOKEN` for HyperSync** (free-tier limits unverified), plus Docker for the local Postgres/Hasura. `monad-testnet` is in the envio 3.12.1 HyperSync chain table. `start_block: 0` is correct but slow.
+- **The Hasura GraphQL query shape** in `lib/omni/indexer.ts` follows Envio's convention and is not verified against a running indexer.
+- **Pre-existing scaffold warning:** WalletConnect logs `indexedDB is not defined` during static prerender. The build still succeeds.
+
+### Run the indexer
+```
+cp packages/indexer/.env.example packages/indexer/.env   # ENVIO_API_TOKEN
+yarn indexer:dev                                         # needs Docker; GraphQL at the URL envio prints
+# then NEXT_PUBLIC_INDEXER_URL=<that GraphQL URL> in packages/nextjs/.env.local
+```

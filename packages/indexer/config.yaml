@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+# Perpl on Monad testnet, restricted to accounts created through the DelegatedAccountFactory.
+# Event signatures were extracted with `solc --combined-json abi` from
+# PerplFoundation/delegated-account interfaces/IExchangeEvents.sol (UDVT enums appear as uint8).
+# Perpl event params are not indexed, so filtering by account happens in the handlers.
+name: omniagent-perpl-indexer
+description: OmniAgent X — Perpl activity of delegated accounts on Monad testnet
+disable_default_cross_chain: true
+# Handlers correlate an OrderRequest with the position event of the same transaction.
+field_selection:
+  transaction_fields: [hash]
+contracts:
+  - name: DelegatedAccountFactory
+    events:
+      - event: "DelegatedAccountCreated(address indexed proxy, address indexed owner, address indexed operator)"
+  - name: Exchange
+    events:
+      - event: "AccountCreated(address account, uint256 id)"
+      - event: "CollateralDeposit(uint256 accountId, uint256 amountCNS, uint256 balanceCNS)"
+      - event: "CollateralWithdrawal(uint256 accountId, uint256 amountCNS, uint256 balanceCNS)"
+      - event: "OrderRequest(uint256 perpId, uint256 accountId, uint256 orderDescId, uint256 orderId, uint8 orderType, uint256 pricePNS, uint256 lotLNS, uint256 expiryBlock, bool postOnly, bool fillOrKill, bool immediateOrCancel, uint256 maxMatches, uint256 leverageHdths, uint256 lastExecutionBlock, uint256 amountCNS, uint256 maxNegPnlCollatBPS, uint256 gasLeft)"
+      - event: "MakerOrderFilled(uint256 perpId, uint256 accountId, uint256 orderId, uint256 pricePNS, uint256 lotLNS, uint256 feeCNS, uint256 lockedBalanceCNS, int256 amountCNS, uint256 balanceCNS)"
+      - event: "PositionOpened(uint256 perpId, uint256 accountId, uint8 positionType, uint256 leverageHdths, uint256 depositCNS, int256 pnlCollateralizedCNS, uint256 pricePNS, uint256 lotLNS, uint256 insFeeCNS, uint256 protFeeCNS)"
+      - event: "PositionOpenedV2(uint256 perpId, uint256 accountId, uint8 positionType, uint256 leverageHdths, uint256 depositCNS, int256 pnlCollateralizedCNS, uint256 pricePNS, uint256 lotLNS, uint256 insFeeCNS, uint256 protFeeCNS, uint256 priceResiduePNSQ16)"
+      - event: "PositionIncreased(uint256 perpId, uint256 accountId, uint8 positionType, uint256 leverageHdths, uint256 startDepositCNS, uint256 endDepositCNS, int256 pnlCollateralizedCNS, int256 premiumPnlSettledCNS, uint256 maxNegPnlCollatBPS, uint256 pricePNS, uint256 startLotLNS, uint256 endLotLNS, uint256 insFeeCNS, uint256 protFeeCNS)"
+      - event: "PositionIncreasedV2(uint256 perpId, uint256 accountId, uint8 positionType, uint256 leverageHdths, uint256 startDepositCNS, uint256 endDepositCNS, int256 pnlCollateralizedCNS, int256 premiumPnlSettledCNS, uint256 maxNegPnlCollatBPS, uint256 pricePNS, uint256 startLotLNS, uint256 endLotLNS, uint256 insFeeCNS, uint256 protFeeCNS, uint256 priceResiduePNSQ16)"
+      - event: "PositionDecreased(uint256 perpId, uint256 accountId, uint8 positionType, uint256 startDepositCNS, uint256 endDepositCNS, uint256 startLotLNS, uint256 endLotLNS, int256 deltaPnlCNS, int256 fundingCNS)"
+      - event: "PositionClosed(uint256 perpId, uint256 accountId, uint8 positionType, uint256 pricePNS, int256 deltaPnlCNS, int256 fundingCNS)"
+      - event: "PositionInverted(uint256 perpId, uint256 accountId, uint8 positionType, uint256 leverageHdths, uint256 startDepositCNS, uint256 endDepositCNS, int256 pnlCollateralizedCNS, uint256 pricePNS, uint256 startLotLNS, uint256 endLotLNS, int256 deltaPnlCNS, int256 fundingCNS, uint256 insFeeCNS, uint256 protFeeCNS)"
+      - event: "PositionLiquidated(uint256 perpId, uint256 posAccountId, uint8 positionType, uint256 markPricePNS, uint256 liqPricePNS, uint256 liqLotLNS, uint256 posLotLNS, int256 deltaPnlCNS, int256 fundingCNS, int256 posAmountCNS, uint256 posDepositCNS, int256 accAmountCNS, uint256 accBalanceCNS, bool onOrderBook)"
+chains:
+  - id: 10143 # Monad testnet (listed as "monad-testnet" in the envio 3.12.1 HyperSync chain table)
+    # The factory deployment block is not documented. 0 is correct but slower on the first sync;
+    # raise it once the factory's deployment block is known.
+    start_block: 0
+    contracts:
+      - name: DelegatedAccountFactory
+        address: "0xf42548Ccb3300Bc76c35dc2D347416db2E8d7209"
+      - name: Exchange
+        address: "0x1964C32f0bE608E7D29302AFF5E61268E72080cc"

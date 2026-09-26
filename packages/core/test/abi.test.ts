@@ -11,6 +11,7 @@ const EXPECTED: Record<string, string> = {
   getExchangeInfo: "0x8bc5b3c5",
   getAccountById: "0x05aca141",
   getPerpetualInfo: "0x00092cce",
+  getPosition: "0x751de421",
 };
 
 describe("hand-written Exchange ABI", () => {

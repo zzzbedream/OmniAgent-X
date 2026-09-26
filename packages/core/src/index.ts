@@ -8,3 +8,6 @@ export * from "./strategy/risk";
 export * from "./strategy/approval";
 export * from "./strategy/llm";
 export * from "./strategy/pipeline";
+export * from "./perpl/marketData";
+export * from "./perpl/positions";
+export * from "./risk/metrics";

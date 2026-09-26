@@ -2,7 +2,7 @@
 
 Passkey-native (Mera) trading assistant on Monad. A user describes a risk profile in plain language, LLMs (Qwen, Kimi) propose a plan, deterministic risk checks decide, and orders execute on Perpl. Funds stay withdrawable only by the user.
 
-Status: **Phase 1 code complete, not yet validated on-chain.** See [`docs/STATUS.md`](docs/STATUS.md) for what is verified. See [`docs/PLAN.md`](docs/PLAN.md) for the full plan and [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) for what has been checked against primary sources (and what has not).
+Status: **Phases 1 and 3 code complete, not yet validated on-chain.** See [`docs/STATUS.md`](docs/STATUS.md) for what is verified. See [`docs/PLAN.md`](docs/PLAN.md) for the full plan and [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md) for what has been checked against primary sources (and what has not).
 
 Built on [scaffold-monad-foundry](https://github.com/monad-developers/scaffold-monad-foundry) (Scaffold-ETH 2, Foundry edition).
 
@@ -15,7 +15,8 @@ Built on [scaffold-monad-foundry](https://github.com/monad-developers/scaffold-m
 ```
 packages/core       Shared logic: Perpl ABIs/orders/allowlist, plan schema, RiskPolicy, EIP-712 approval, LLM pipeline
 packages/agent-worker  Operator EOA service (dry-run by default): consent, plan validation, execOrder
-packages/nextjs     PWA (Next.js): /onboard, /intent, /api/strategy, Mera in lib/mera/, spike page /spike/mera
+packages/nextjs     PWA (Next.js): /onboard, /intent, /dashboard, /api/strategy, /api/perpl/context, Mera in lib/mera/, spike page /spike/mera
+packages/indexer    Envio HyperIndex: Perpl activity of factory-created accounts + position side calibration
 packages/foundry    Contracts. CRE receiver spike in contracts/spikes/, tests in test/
 cre/spike-workflow  Chainlink CRE workflow (TypeScript → WASM)
 docs/               Plan and verified facts
@@ -32,7 +33,7 @@ docs/               Plan and verified facts
 
 Checks that run offline:
 ```
-yarn test                  # core + worker + foundry tests
+yarn test                  # core + worker + indexer + foundry tests
 yarn foundry:test          # OmniReceiverSpike unit tests
 yarn next:check-types      # frontend types
 cd cre/spike-workflow && bun install && bun x cre-compile main.ts dist/workflow.wasm
