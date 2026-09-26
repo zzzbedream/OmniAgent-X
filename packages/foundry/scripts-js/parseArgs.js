@@ -80,22 +80,27 @@ try {
   process.exit(1);
 }
 
+// .env.example historically named this ETH_KEYSTORE_ACCOUNT; without a fallback it is undefined on
+// localhost and deploy looks for ~/.foundry/keystores/undefined.
+const localhostKeystore =
+  process.env.LOCALHOST_KEYSTORE_ACCOUNT || process.env.ETH_KEYSTORE_ACCOUNT || "scaffold-eth-default";
+
 if (
-  process.env.LOCALHOST_KEYSTORE_ACCOUNT !== "scaffold-eth-default" &&
+  localhostKeystore !== "scaffold-eth-default" &&
   network === "localhost"
 ) {
   console.log(`
-⚠️ Warning: Using ${process.env.LOCALHOST_KEYSTORE_ACCOUNT} keystore account on localhost.
+⚠️ Warning: Using ${localhostKeystore} keystore account on localhost.
 
 You can either:
-1. Enter the password for ${process.env.LOCALHOST_KEYSTORE_ACCOUNT} account
+1. Enter the password for ${localhostKeystore} account
    OR
 2. Set the localhost keystore account in your .env and re-run the command to skip password prompt:
    LOCALHOST_KEYSTORE_ACCOUNT='scaffold-eth-default'
 `);
 }
 
-let selectedKeystore = process.env.LOCALHOST_KEYSTORE_ACCOUNT;
+let selectedKeystore = localhostKeystore;
 if (network !== "localhost") {
   if (keystoreArg) {
     // Use the keystore provided via command line argument
