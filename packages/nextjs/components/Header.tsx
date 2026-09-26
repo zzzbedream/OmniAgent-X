@@ -22,6 +22,14 @@ export const menuLinks: HeaderMenuLink[] = [
   },
 
   {
+    label: "Cuenta",
+    href: "/onboard",
+  },
+  {
+    label: "Estrategia",
+    href: "/intent",
+  },
+  {
     label: "Debug Contracts",
     href: "/debug",
     icon: <BugAntIcon className="h-4 w-4" />,

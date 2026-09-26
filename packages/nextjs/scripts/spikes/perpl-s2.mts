@@ -3,13 +3,16 @@
 // Run (Node >= 22.6, from packages/nextjs):
 //   node --experimental-strip-types scripts/spikes/perpl-s2.mts            # read-only checks
 //   OWNER_PK=0x.. OPERATOR_PK=0x.. DEPOSIT=10 \
-//   node --experimental-strip-types scripts/spikes/perpl-s2.mts --write    # create account + deposit
+//   node --experimental-strip-types scripts/spikes/perpl-s2.mts --write    # create account + deposit + fix allowlist
+//   OPERATOR_PK=0x.. DELEGATED_ACCOUNT=0x.. \
+//   node --experimental-strip-types scripts/spikes/perpl-s2.mts --test-order   # operator posts a resting BTC bid
 //
 // Addresses come from PerplFoundation/delegated-account README and PerplFoundation/api-docs README
 // (see docs/VERIFIED_FACTS.md). The script only uses the deployed contracts' public ABI; no BUSL code is copied.
 //
-// Out of scope here: execOrder. Its OrderDesc encoding (price/lot scaling per market) is not verified yet;
-// do that step with the Perpl api-docs examples before automating it.
+// --test-order mirrors Perpl's own fork test (_btcPostOnlyBid): post-only OpenLong (on-chain enum 0) one
+// price unit under the best bid, 10 lots, 1x, expiryBlock = head + 1000. It rests (does not fill) and expires
+// on its own. Success = simulate returns an orderId > 0 and the tx succeeds.
 import {
   type Address,
   type Hex,
@@ -37,10 +40,29 @@ const factoryAbi = parseAbi([
 ]);
 const accountAbi = parseAbi([
   "function createAccount(uint256 amount)",
+  "function operatorAllowlist(bytes4) view returns (bool)",
+  "function setOperatorAllowlist(bytes4 selector, bool allowed)",
   "function accountId() view returns (uint256)",
   "function isOperator(address) view returns (bool)",
   "function owner() view returns (address)",
 ]);
+const exchangeAbi = parseAbi([
+  "function execOrder((uint256 orderDescId, uint256 perpId, uint8 orderType, uint256 orderId, uint256 pricePNS, uint256 lotLNS, uint256 expiryBlock, bool postOnly, bool fillOrKill, bool immediateOrCancel, uint256 maxMatches, uint256 leverageHdths, uint256 lastExecutionBlock, uint256 amountCNS, uint256 maxNegPnlCollatBPS) orderDesc) returns ((uint256 perpId, uint256 orderId) signature)",
+  "function getPerpetualInfo(uint256 perpId) view returns ((string name, string symbol, uint256 priceDecimals, uint256 lotDecimals, bytes32 linkFeedId, uint256 priceTolPer100K, uint256 marginTol, uint256 marginTolDecimals, uint256 refPriceMaxAgeSec, uint256 positionBalanceCNS, uint256 insuranceBalanceCNS, uint256 markPNS, uint256 markTimestamp, uint256 lastPNS, uint256 lastTimestamp, uint256 oraclePNS, uint256 oracleTimestampSec, uint256 longOpenInterestLNS, uint256 shortOpenInterestLNS, uint256 fundingStartBlock, int16 fundingRatePct100k, uint256 absFundingClampPctPer100K, uint8 status, uint256 basePricePNS, uint256 maxBidPriceONS, uint256 minBidPriceONS, uint256 maxAskPriceONS, uint256 minAskPriceONS, uint256 numOrders, bool ignOracle) perpetualInfo)",
+]);
+// Mirrors PerplFoundation/delegated-account script/helpers/OperatorAllowlistScript.sol.
+const CURRENT_SELECTORS: Hex[] = [
+  "0x4d8dc985",
+  "0x39435dac",
+  "0xf769f0d3",
+  "0x171a5b81",
+  "0xbbac6c95",
+  "0xbad4a01f",
+  "0x7962f910",
+];
+const STALE_SELECTORS: Hex[] = ["0x6b69ebbe", "0xaf3176da", "0x9c64b2b5", "0x4a1feb12", "0x1eebd35e"];
+const BTC_PERP_ID = 16n;
+
 const erc20Abi = parseAbi([
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
@@ -163,7 +185,94 @@ async function createAndFund(decimals: number) {
   ]);
   check("exchange accountId assigned", accountId > 0n, `accountId=${accountId}`);
   check("operator registered", isOp, operator.address);
+
+  // The testnet factory mints a stale operator allowlist; apply Perpl's sync (grant current, revoke stale).
+  for (const [selectors, allowed] of [
+    [CURRENT_SELECTORS, true],
+    [STALE_SELECTORS, false],
+  ] as const) {
+    for (const selector of selectors) {
+      const has = await publicClient.readContract({
+        address: proxy,
+        abi: accountAbi,
+        functionName: "operatorAllowlist",
+        args: [selector],
+      });
+      if (has === allowed) continue;
+      const hash = await wallet.writeContract({
+        address: proxy,
+        abi: accountAbi,
+        functionName: "setOperatorAllowlist",
+        args: [selector, allowed],
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      console.log(`INFO  ${allowed ? "granted" : "revoked"} ${selector}`);
+    }
+  }
+  const canExec = await publicClient.readContract({
+    address: proxy,
+    abi: accountAbi,
+    functionName: "operatorAllowlist",
+    args: ["0x4d8dc985"],
+  });
+  check("operator may call execOrder", canExec);
+  console.log(
+    `NEXT  OPERATOR_PK=… DELEGATED_ACCOUNT=${proxy} node --experimental-strip-types scripts/spikes/perpl-s2.mts --test-order`,
+  );
+}
+
+async function testOrder() {
+  const operatorPk = process.env.OPERATOR_PK as Hex | undefined;
+  const proxy = process.env.DELEGATED_ACCOUNT as Address | undefined;
+  if (!operatorPk || !proxy) throw new Error("OPERATOR_PK and DELEGATED_ACCOUNT are required with --test-order");
+  const operator = privateKeyToAccount(operatorPk);
+  const perp = await publicClient.readContract({
+    address: EXCHANGE,
+    abi: exchangeAbi,
+    functionName: "getPerpetualInfo",
+    args: [BTC_PERP_ID],
+  });
+  console.log(
+    `INFO  BTC priceDecimals=${perp.priceDecimals} lotDecimals=${perp.lotDecimals} mark=${perp.markPNS} bestBidONS=${perp.maxBidPriceONS} ignOracle=${perp.ignOracle} status=${perp.status}`,
+  );
+  if (perp.maxBidPriceONS === 0n) return check("book has bids for a safe test bid", false);
+  const head = await publicClient.getBlockNumber();
+  const order = {
+    orderDescId: 0n,
+    perpId: BTC_PERP_ID,
+    orderType: 0, // OpenLong in the ON-CHAIN enum (REST uses 1)
+    orderId: 0n,
+    pricePNS: perp.basePricePNS + perp.maxBidPriceONS - 10n ** perp.priceDecimals,
+    lotLNS: 10n,
+    expiryBlock: head + 1000n,
+    postOnly: true,
+    fillOrKill: false,
+    immediateOrCancel: false,
+    maxMatches: 0n,
+    leverageHdths: 100n,
+    lastExecutionBlock: 0n,
+    amountCNS: 0n,
+    maxNegPnlCollatBPS: 0n,
+  };
+  try {
+    const { request, result } = await publicClient.simulateContract({
+      account: operator,
+      address: proxy, // the DelegatedAccount fallback forwards to the Exchange
+      abi: exchangeAbi,
+      functionName: "execOrder",
+      args: [order],
+    });
+    check("simulated execOrder returns an orderId", result.orderId > 0n, `orderId=${result.orderId}`);
+    const wallet = createWalletClient({ account: operator, chain: monadTestnet, transport: http(RPC_URL) });
+    const hash = await wallet.writeContract(request);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    check("execOrder tx succeeded", receipt.status === "success", hash);
+  } catch (e) {
+    // A revert here is the most informative outcome of S2: keep the full reason.
+    check("execOrder accepted", false, (e as Error).message.split("\n").slice(0, 3).join(" | "));
+  }
 }
 
 const { decimals } = await readOnlyChecks();
 if (process.argv.includes("--write")) await createAndFund(decimals);
+if (process.argv.includes("--test-order")) await testOrder();

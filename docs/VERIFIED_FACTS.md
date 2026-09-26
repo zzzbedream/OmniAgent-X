@@ -51,7 +51,25 @@ environment, so anything that only those sites would confirm is marked **UNVERIF
 - Minimum deposit to open an account: 10 (collateral units, shown as "10.0 AUSD" on mainnet).
 - API auth uses Ed25519 API keys, enrolled once with a wallet signature.
 - `delegated-account` is licensed **BUSL-1.1**. This repo copies none of its code and only calls the deployed contracts through their public ABI.
-- **UNVERIFIED:** a public faucet for the testnet "USD" collateral token. `OrderDesc` price and lot scaling per market (`pricePNS`, `lotLNS`).
+- **On-chain `OrderDescEnum` starts at `OpenLong = 0`** (OpenLong, OpenShort, CloseLong, CloseShort, Cancel, IncreasePositionCollateral, Change), per `test/DelegatedAccount.fork.t.sol`. The REST/WS `OrderType` starts at `OpenLong = 1`. Mixing them would turn every long into a short.
+- `OrderDesc` semantics come from Perpl's fork test `_btcPostOnlyBid`:
+  - Prices are absolute PNS (scaled by `priceDecimals`); the book gives ONS offsets from `basePricePNS`, so best bid = `basePricePNS + maxBidPriceONS`.
+  - Lots are LNS (scaled by `lotDecimals`) and leverage is in hundredths.
+  - A resting order uses `orderDescId 0` and `expiryBlock = block + 1000`.
+  - BTC on testnet had `priceDecimals 1` and `lotDecimals 5`.
+- **The testnet Factory mints accounts with a stale operator allowlist.** `execOrder` (`0x4d8dc985`) is NOT allowed until the owner grants it (`Fork_DeployedFactoryAllowlist_Test`). The repair grants 7 current selectors and revokes 5 stale ones (`script/helpers/OperatorAllowlistScript.sol`). It is implemented in `packages/core/src/perpl/allowlist.ts`, in the `/onboard` UI and in S2.
+- Every selector in the hand-written Exchange ABI matches `solc --hashes interfaces/IExchange.sol` (enforced by `packages/core/test/abi.test.ts`).
+- **Contradiction on testnet collateral:**
+  - api-docs: `0xdf5b718d8fcc173335185a2a1513ee8151e3c027` ("USD").
+  - fork test: `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` ("AUSD, 6 decimals").
+  - The code reads it on-chain via `Exchange.getExchangeInfo()` and hard-codes neither.
+- Perpl's fork tests call `setIgnOracle(BTC, true)` as the exchange owner before placing orders. **Risk:** on live testnet an order may revert when the oracle is stale; S2 `--test-order` prints `ignOracle` and the revert reason.
+- **UNVERIFIED:**
+  - A public faucet for the testnet collateral token.
+  - IOC behavior when priced away from the book.
+  - Minimum lot sizes.
+  - Units of `fundingRatePct100k` (not fed to the LLM).
+  - `PositionEnum` values (close orders are not implemented yet).
 
 ## Chainlink CRE
 - Workflows compile to WASM through Javy/QuickJS. There is no `fetch`, no `node:*` and no `setTimeout`. Tooling: `bun` plus the `cre` CLI. This repo's `cre/spike-workflow` compiles to WASM with `cre-compile`.
