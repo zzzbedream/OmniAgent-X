@@ -1,4 +1,4 @@
-import type { PublicClient } from "viem";
+import { BaseError, ContractFunctionRevertedError, type PublicClient } from "viem";
 import { exchangeAbi } from "./abi";
 import { MARKET_SYMBOLS, type MarketSymbol, PERPL_TESTNET } from "./network";
 
@@ -41,11 +41,18 @@ export async function readPositions(client: PublicClient, accountId: bigint): Pr
           markPricePNS,
           markPriceValid,
         };
-      } catch {
-        // Behaviour for a market without a position (empty struct vs revert) is not documented.
-        return undefined;
+      } catch (e) {
+        // Behaviour for a market without a position (empty struct vs revert) is not documented, so a
+        // contract revert is read as "no position". Transport/provider failures must surface: treating an
+        // RPC outage as an empty portfolio would hide risk on the dashboard.
+        if (isContractRevert(e)) return undefined;
+        throw e;
       }
     }),
   );
   return rows.filter((r): r is OnChainPosition => !!r && r.lotLNS > 0n);
+}
+
+export function isContractRevert(e: unknown): boolean {
+  return e instanceof BaseError && !!e.walk(err => err instanceof ContractFunctionRevertedError);
 }

@@ -91,6 +91,8 @@ export function createWorker(cfg: WorkerConfig) {
         mode,
       };
       return perAccount.run(validated.message.account, async (): Promise<[number, unknown]> => {
+        // Re-check inside the per-account lock: two identical submissions both pass validation above.
+        if (!log.reserve(base)) throw new ValidationError("approval nonce already used");
         try {
           await checkAccountOnChain(client, validated, operator.address);
         } catch (e) {
@@ -125,6 +127,7 @@ export function createWorker(cfg: WorkerConfig) {
         mode,
       };
       return perAccount.run(close.message.account, async (): Promise<[number, unknown]> => {
+        if (!log.reserve(base)) throw new ValidationError("approval nonce already used");
         try {
           const result = await executeClose({
             client,

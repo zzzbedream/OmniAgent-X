@@ -9,6 +9,8 @@ const publicClient = createPublicClient({
   transport: http(),
 });
 
+const MAX_STORAGE_SLOTS = 64;
+
 export const AddressStorageTab = ({ address }: { address: Address }) => {
   const [storage, setStorage] = useState<string[]>([]);
 
@@ -16,21 +18,17 @@ export const AddressStorageTab = ({ address }: { address: Address }) => {
     const fetchStorage = async () => {
       try {
         const storageData = [];
-        let idx = 0;
-
-        while (true) {
+        // Storage is sparse: a zero slot is not an end marker and populated slots can follow it.
+        // Scan a fixed window of low slots (where simple contracts keep their state) instead of looping
+        // until the first zero, which could miss state or issue unbounded RPC calls.
+        for (let idx = 0; idx < MAX_STORAGE_SLOTS; idx++) {
           const storageAtPosition = await publicClient.getStorageAt({
             address: address,
             slot: toHex(idx),
           });
 
-          if (storageAtPosition === "0x" + "0".repeat(64)) break;
-
-          if (storageAtPosition) {
-            storageData.push(storageAtPosition);
-          }
-
-          idx++;
+          // Keep zero slots too, so the array index stays equal to the slot number shown below.
+          storageData.push(storageAtPosition ?? "0x" + "0".repeat(64));
         }
         setStorage(storageData);
       } catch (error) {

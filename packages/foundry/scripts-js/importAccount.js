@@ -52,7 +52,7 @@ async function importAccount() {
       ["wallet", "import", accountName, "--interactive"],
       {
         stdio: "inherit",
-        shell: true,
+        // No shell: accountName is user input and must reach cast as a single argv entry.
         cwd: process.cwd(),
       }
     );

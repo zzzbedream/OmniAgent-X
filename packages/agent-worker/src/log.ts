@@ -12,7 +12,7 @@ export type DecisionEntry = {
   nonce: string;
   planHash: string;
   mode: "dry-run" | "live";
-  status: "rejected" | "built" | "sent" | "partial" | "failed";
+  status: "pending" | "rejected" | "built" | "sent" | "partial" | "failed";
   detail?: unknown;
 };
 
@@ -40,6 +40,19 @@ export class DecisionLog {
 
   isNonceUsed(owner: string, nonce: bigint) {
     return this.usedNonces.has(DecisionLog.key(owner, nonce));
+  }
+
+  /**
+   * Atomically claims an approval nonce before any on-chain work: returns false if it was already used or
+   * reserved. The reservation is persisted as a `pending` entry, so a crash after a tx is sent but before
+   * the result is logged still consumes the nonce on restart (no replay).
+   */
+  reserve(entry: Omit<DecisionEntry, "status" | "detail">): boolean {
+    const key = DecisionLog.key(entry.owner, entry.nonce);
+    if (this.usedNonces.has(key)) return false;
+    this.usedNonces.add(key);
+    appendFileSync(this.file, JSON.stringify({ ...entry, status: "pending" }, jsonReplacer) + "\n");
+    return true;
   }
 
   append(entry: DecisionEntry) {

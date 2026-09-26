@@ -25,11 +25,15 @@ export const useContractLogs = (address: Address) => {
     fetchLogs();
 
     return client?.watchBlockNumber({
-      onBlockNumber: async (_blockNumber, prevBlockNumber) => {
+      onBlockNumber: async (blockNumber, prevBlockNumber) => {
+        // prevBlockNumber was already covered (initial fetch or previous callback): start after it.
+        // On the first callback it is undefined, so only the new block is read.
+        const fromBlock = prevBlockNumber !== undefined ? prevBlockNumber + 1n : blockNumber;
+        if (fromBlock > blockNumber) return;
         const newLogs = await client.getLogs({
           address: address,
-          fromBlock: prevBlockNumber,
-          toBlock: "latest",
+          fromBlock,
+          toBlock: blockNumber,
         });
         setLogs(prevLogs => [...prevLogs, ...newLogs]);
       },

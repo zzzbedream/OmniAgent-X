@@ -8,8 +8,10 @@ import {
   type IntentParams,
   PERPL_TESTNET,
   PLAN_APPROVAL_TYPES,
+  PLAN_REQUEST_TYPES,
   type RiskReport,
   type TradePlan,
+  planRequestHash,
   usdToMicro,
 } from "@omniagent/core";
 import type { NextPage } from "next";
@@ -50,10 +52,29 @@ const Intent: NextPage = () => {
     setResult(undefined);
     setExecution(undefined);
     try {
+      if (!account || !walletClient || !delegated) throw new Error("inicia sesión y crea tu cuenta de trading primero");
+      // Authenticates the paid planning call: bound to this exact text and budget, valid 5 minutes.
+      const budgetUsd = Number(budget);
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 240);
+      const signature = await walletClient.signTypedData({
+        domain: APPROVAL_DOMAIN(PERPL_TESTNET.chainId),
+        types: PLAN_REQUEST_TYPES,
+        primaryType: "PlanRequest",
+        message: {
+          owner: account.address,
+          account: delegated,
+          requestHash: planRequestHash(request, budgetUsd),
+          deadline,
+        },
+      });
       const res = await fetch("/api/strategy", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request, budgetUsd: Number(budget) }),
+        body: JSON.stringify({
+          request,
+          budgetUsd,
+          auth: { owner: account.address, account: delegated, deadline: deadline.toString(), signature },
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(`${body.error}${body.missing ? ` (${body.missing.join(", ")})` : ""}`);
@@ -141,7 +162,11 @@ const Intent: NextPage = () => {
           onChange={e => setBudget(e.target.value)}
         />
       </label>
-      <button className="btn btn-primary" disabled={!!loading || !(Number(budget) > 0)} onClick={plan}>
+      <button
+        className="btn btn-primary"
+        disabled={!!loading || !(Number(budget) > 0) || !account || !delegated}
+        onClick={plan}
+      >
         {loading === "plan" ? "Consultando Kimi y Qwen…" : "Generar plan"}
       </button>
 

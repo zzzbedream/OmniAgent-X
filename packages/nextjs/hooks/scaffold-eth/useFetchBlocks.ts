@@ -88,8 +88,12 @@ export const useFetchBlocks = () => {
       try {
         if (currentPage === 0) {
           if (newBlock.transactions.length > 0) {
+            // The watcher uses includeTransactions: true, so entries are usually full objects already;
+            // only fetch the ones that arrive as bare hashes.
             const transactionsDetails = await Promise.all(
-              newBlock.transactions.map((txHash: string) => testClient.getTransaction({ hash: txHash as Hash })),
+              newBlock.transactions.map((tx: string | Transaction) =>
+                typeof tx === "string" ? testClient.getTransaction({ hash: tx as Hash }) : tx,
+              ),
             );
             newBlock.transactions = transactionsDetails;
           }

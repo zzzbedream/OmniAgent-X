@@ -16,11 +16,22 @@ import {
   hashPlanOrders,
   usdToMicro,
 } from "@omniagent/core";
-import { type Address, type Hex, getAddress, isAddress, isHex, recoverTypedDataAddress } from "viem";
+import { type Address, type Hex, getAddress, isAddress, recoverTypedDataAddress } from "viem";
 import { z } from "zod";
 
 const addr = z.string().refine(isAddress, "invalid address");
-const hex = z.string().refine(v => isHex(v), "invalid hex");
+// Exact lengths at the wire boundary: a bytes32 hash and a 65-byte (r, s, v) ECDSA signature.
+const bytes32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "expected 32-byte hex");
+const signature65 = z.string().regex(/^0x[0-9a-fA-F]{130}$/, "expected 65-byte hex signature");
+
+/** recoverTypedDataAddress throws on malformed-but-well-sized signatures; report those as 400, not 500. */
+async function recoverOr400(args: Parameters<typeof recoverTypedDataAddress>[0]): Promise<Address> {
+  try {
+    return await recoverTypedDataAddress(args);
+  } catch {
+    throw new ValidationError("signature could not be recovered");
+  }
+}
 const uintString = z.string().regex(/^\d+$/, "expected a decimal integer string");
 
 /** Wire format: bigints travel as decimal strings. */
@@ -31,12 +42,12 @@ export const SubmitPlanSchema = z.object({
     message: z.object({
       owner: addr,
       account: addr,
-      planHash: hex,
+      planHash: bytes32,
       budgetMicroUsd: uintString,
       nonce: uintString,
       deadline: uintString,
     }),
-    signature: hex,
+    signature: signature65,
   }),
 });
 export type SubmitPlanRequest = z.infer<typeof SubmitPlanSchema>;
@@ -82,7 +93,7 @@ export async function validateSubmission(
   if (message.deadline <= opts.nowSec) throw new ValidationError("approval expired");
   if (opts.isNonceUsed(message.owner, message.nonce)) throw new ValidationError("approval nonce already used");
 
-  const signer = await recoverTypedDataAddress({
+  const signer = await recoverOr400({
     domain: APPROVAL_DOMAIN(opts.chainId),
     types: PLAN_APPROVAL_TYPES,
     primaryType: "PlanApproval",
@@ -105,7 +116,7 @@ export const SubmitCloseSchema = z.object({
       nonce: uintString,
       deadline: uintString,
     }),
-    signature: hex,
+    signature: signature65,
   }),
 });
 
@@ -129,7 +140,7 @@ export async function validateClose(
   if (message.deadline <= opts.nowSec) throw new ValidationError("approval expired");
   if (opts.isNonceUsed(message.owner, message.nonce)) throw new ValidationError("approval nonce already used");
   const signature = parsed.data.approval.signature as Hex;
-  const signer = await recoverTypedDataAddress({
+  const signer = await recoverOr400({
     domain: APPROVAL_DOMAIN(opts.chainId),
     types: CLOSE_APPROVAL_TYPES,
     primaryType: "ClosePosition",
@@ -146,7 +157,7 @@ export const MARKET_BY_PERP = new Map<bigint, MarketSymbol>(
 
 // ── Consent requests ────────────────────────────────────────────────────────
 
-const ConsentSchema = z.object({ owner: addr, deadline: uintString, signature: hex });
+const ConsentSchema = z.object({ owner: addr, deadline: uintString, signature: signature65 });
 
 /** The owner proves control of the address before the worker signs an operator consent for it. */
 export async function validateConsentRequest(body: unknown, opts: { chainId: number; nowSec: bigint }) {
@@ -156,7 +167,7 @@ export async function validateConsentRequest(body: unknown, opts: { chainId: num
   const deadline = BigInt(parsed.data.deadline);
   if (deadline <= opts.nowSec) throw new ValidationError("consent request expired");
   if (deadline > opts.nowSec + 3600n) throw new ValidationError("consent request deadline too far in the future");
-  const signer = await recoverTypedDataAddress({
+  const signer = await recoverOr400({
     domain: APPROVAL_DOMAIN(opts.chainId),
     types: CONSENT_REQUEST_TYPES,
     primaryType: "ConsentRequest",

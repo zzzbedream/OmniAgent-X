@@ -27,3 +27,15 @@ describe("DecisionLog", () => {
     expect(reopened.recent("0x00000000000000000000000000000000000000AA").map(e => e.nonce)).toEqual(["2", "1"]);
   });
 });
+
+describe("DecisionLog.reserve", () => {
+  it("claims a nonce once, persists the claim, and survives a restart", () => {
+    const dir = mkdtempSync(join(tmpdir(), "omni-reserve-"));
+    const log = new DecisionLog(dir);
+    const e = { ...entry("9", "built"), status: undefined } as unknown as Parameters<DecisionLog["reserve"]>[0];
+    expect(log.reserve(e)).toBe(true);
+    expect(log.reserve(e)).toBe(false);
+    // simulated crash: the final result was never appended, the pending claim still blocks replay
+    expect(new DecisionLog(dir).isNonceUsed("0xabc0000000000000000000000000000000000001", 9n)).toBe(true);
+  });
+});

@@ -11,3 +11,4 @@ export * from "./strategy/pipeline";
 export * from "./perpl/marketData";
 export * from "./perpl/positions";
 export * from "./risk/metrics";
+export * from "./strategy/requestAuth";

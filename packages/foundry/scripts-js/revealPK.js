@@ -1,5 +1,5 @@
 import { listKeystores } from "./listKeystores.js";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 
 async function revealPk() {
   try {
@@ -15,9 +15,8 @@ async function revealPk() {
     }
 
     try {
-      const revealPKCommand = `cast wallet decrypt-keystore ${selectedKeystore}`;
-
-      const revealPKResult = execSync(revealPKCommand).toString().trim();
+      // argv array, no shell: the keystore file name must not be interpreted as shell syntax.
+      const revealPKResult = execFileSync("cast", ["wallet", "decrypt-keystore", selectedKeystore]).toString().trim();
 
       console.log(`\n🔑 ${revealPKResult}`);
     } catch (error) {

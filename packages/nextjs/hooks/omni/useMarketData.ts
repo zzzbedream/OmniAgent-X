@@ -12,6 +12,8 @@ import {
   subscriptionFrame,
 } from "@omniagent/core";
 
+const HEALTHY_AFTER_MS = 30_000;
+
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
 export function useMarketData() {
@@ -28,13 +30,16 @@ export function useMarketData() {
     let ws: WebSocket | undefined;
     let retry = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let healthyTimer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
 
     const connect = () => {
       setStatus("connecting");
       ws = new WebSocket(url);
       ws.onopen = () => {
-        retry = 0;
+        // Only a connection that stays up resets the backoff; a server that accepts and immediately
+        // drops us must not turn this into a 1-second reconnect loop.
+        healthyTimer = setTimeout(() => (retry = 0), HEALTHY_AFTER_MS);
         lastSn.current = undefined;
         setStatus("open");
         ws?.send(JSON.stringify(subscriptionFrame(PERPL_TESTNET.chainId)));
@@ -53,6 +58,7 @@ export function useMarketData() {
         }
       };
       ws.onclose = () => {
+        if (healthyTimer) clearTimeout(healthyTimer);
         setStatus("closed");
         if (stopped) return;
         const delay = Math.min(30_000, 1000 * 2 ** retry++);
@@ -65,6 +71,7 @@ export function useMarketData() {
     return () => {
       stopped = true;
       if (timer) clearTimeout(timer);
+      if (healthyTimer) clearTimeout(healthyTimer);
       ws?.close();
     };
   }, []);
