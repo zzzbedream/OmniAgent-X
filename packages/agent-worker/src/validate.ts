@@ -2,6 +2,11 @@
 // On-chain checks (owner, operator, balance) happen in executor.ts.
 import {
   APPROVAL_DOMAIN,
+  CLOSE_APPROVAL_TYPES,
+  CONSENT_REQUEST_TYPES,
+  type CloseApprovalMessage,
+  type MarketSymbol,
+  PERPL_TESTNET,
   PLAN_APPROVAL_TYPES,
   type PlanApprovalMessage,
   type RiskReport,
@@ -87,4 +92,77 @@ export async function validateSubmission(
   if (signer !== message.owner) throw new ValidationError("signature is not from the owner");
 
   return { plan, budgetUsd, risk, message, signature: approval.signature as Hex };
+}
+
+// ── Close approvals ─────────────────────────────────────────────────────────
+
+export const SubmitCloseSchema = z.object({
+  approval: z.object({
+    message: z.object({
+      owner: addr,
+      account: addr,
+      perpId: uintString,
+      nonce: uintString,
+      deadline: uintString,
+    }),
+    signature: hex,
+  }),
+});
+
+export type ValidatedClose = { message: CloseApprovalMessage; signature: Hex };
+
+export async function validateClose(
+  body: unknown,
+  opts: { chainId: number; nowSec: bigint; isNonceUsed: (owner: Address, nonce: bigint) => boolean },
+): Promise<ValidatedClose> {
+  const parsed = SubmitCloseSchema.safeParse(body);
+  if (!parsed.success) throw new ValidationError("malformed request", parsed.error.issues);
+  const m = parsed.data.approval.message;
+  const message: CloseApprovalMessage = {
+    owner: getAddress(m.owner),
+    account: getAddress(m.account),
+    perpId: BigInt(m.perpId),
+    nonce: BigInt(m.nonce),
+    deadline: BigInt(m.deadline),
+  };
+  if (!MARKET_BY_PERP.has(message.perpId)) throw new ValidationError(`unknown perpId ${message.perpId}`);
+  if (message.deadline <= opts.nowSec) throw new ValidationError("approval expired");
+  if (opts.isNonceUsed(message.owner, message.nonce)) throw new ValidationError("approval nonce already used");
+  const signature = parsed.data.approval.signature as Hex;
+  const signer = await recoverTypedDataAddress({
+    domain: APPROVAL_DOMAIN(opts.chainId),
+    types: CLOSE_APPROVAL_TYPES,
+    primaryType: "ClosePosition",
+    message,
+    signature,
+  });
+  if (signer !== message.owner) throw new ValidationError("signature is not from the owner");
+  return { message, signature };
+}
+
+export const MARKET_BY_PERP = new Map<bigint, MarketSymbol>(
+  (Object.entries(PERPL_TESTNET.markets) as [MarketSymbol, bigint][]).map(([sym, id]) => [id, sym]),
+);
+
+// ── Consent requests ────────────────────────────────────────────────────────
+
+const ConsentSchema = z.object({ owner: addr, deadline: uintString, signature: hex });
+
+/** The owner proves control of the address before the worker signs an operator consent for it. */
+export async function validateConsentRequest(body: unknown, opts: { chainId: number; nowSec: bigint }) {
+  const parsed = ConsentSchema.safeParse(body);
+  if (!parsed.success) throw new ValidationError("malformed request", parsed.error.issues);
+  const owner = getAddress(parsed.data.owner);
+  const deadline = BigInt(parsed.data.deadline);
+  if (deadline <= opts.nowSec) throw new ValidationError("consent request expired");
+  if (deadline > opts.nowSec + 3600n) throw new ValidationError("consent request deadline too far in the future");
+  const signer = await recoverTypedDataAddress({
+    domain: APPROVAL_DOMAIN(opts.chainId),
+    types: CONSENT_REQUEST_TYPES,
+    primaryType: "ConsentRequest",
+    message: { owner, deadline },
+    signature: parsed.data.signature as Hex,
+  });
+  if (signer !== owner) throw new ValidationError("consent request is not signed by the owner");
+  return owner;
 }

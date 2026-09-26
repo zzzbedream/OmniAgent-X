@@ -145,3 +145,50 @@ export function buildPostOnlyTestBid(
     maxNegPnlCollatBPS: 0n,
   };
 }
+
+/**
+ * Immediate-or-cancel order that closes an existing position in full.
+ * Closing a long sells (accept down to mark·(1−s)); closing a short buys (pay up to mark·(1+s)).
+ * The side must come from a verified source (the order that opened it), never from the raw PositionEnum.
+ *
+ * NOT verified on testnet: whether Close orders honour leverageHdths/expiryBlock the same way as opens.
+ */
+export function buildCloseIocOrder(
+  side: "long" | "short",
+  market: MarketSymbol,
+  lotLNS: bigint,
+  perp: PerpSnapshot,
+  opts: { slippageBps: number; currentBlock: bigint; ttlBlocks?: bigint },
+): OrderDesc {
+  if (lotLNS <= 0n) throw new OrderBuildError("nothing to close");
+  if (perp.markPNS <= 0n) throw new OrderBuildError("mark price unavailable");
+  if (!Number.isInteger(opts.slippageBps) || opts.slippageBps < 0 || opts.slippageBps > 1000) {
+    throw new OrderBuildError(`slippageBps out of range: ${opts.slippageBps}`);
+  }
+  const slip = BigInt(opts.slippageBps);
+  const pricePNS = side === "long" ? (perp.markPNS * (BPS - slip)) / BPS : (perp.markPNS * (BPS + slip)) / BPS;
+  return {
+    orderDescId: 0n,
+    perpId: PERPL_TESTNET.markets[market],
+    orderType: side === "long" ? OrderDescType.CloseLong : OrderDescType.CloseShort,
+    orderId: 0n,
+    pricePNS,
+    lotLNS,
+    expiryBlock: opts.currentBlock + (opts.ttlBlocks ?? 100n),
+    postOnly: false,
+    fillOrKill: false,
+    immediateOrCancel: true,
+    maxMatches: 0n,
+    leverageHdths: 100n,
+    lastExecutionBlock: 0n,
+    amountCNS: 0n,
+    maxNegPnlCollatBPS: 0n,
+  };
+}
+
+/** Side implied by an on-chain order type we sent (verified OrderDescEnum), for open orders only. */
+export function sideOfOpenOrderType(orderType: number): "long" | "short" | undefined {
+  if (orderType === OrderDescType.OpenLong) return "long";
+  if (orderType === OrderDescType.OpenShort) return "short";
+  return undefined;
+}

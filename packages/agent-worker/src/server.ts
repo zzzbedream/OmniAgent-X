@@ -1,12 +1,13 @@
 import { ASSIGN_OPERATOR_TYPES, FACTORY_EIP712_DOMAIN, PERPL_TESTNET, delegatedAccountFactoryAbi } from "@omniagent/core";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { createPublicClient, createWalletClient, getAddress, http, isAddress } from "viem";
+import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
 import type { WorkerConfig } from "./config";
-import { checkAccountOnChain, executePlan } from "./executor";
+import { checkAccountOnChain, executeClose, executePlan } from "./executor";
 import { DecisionLog, jsonReplacer } from "./log";
-import { ValidationError, validateSubmission } from "./validate";
+import { KeyedMutex, RateLimiter } from "./rateLimit";
+import { ValidationError, validateClose, validateConsentRequest, validateSubmission } from "./validate";
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -25,6 +26,16 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   }
 }
 
+class RateLimited extends Error {}
+
+function clientKey(req: IncomingMessage, trustProxy: boolean): string {
+  const fwd = req.headers["x-forwarded-for"];
+  if (trustProxy && typeof fwd === "string" && fwd.length > 0) return fwd.split(",")[0]!.trim();
+  return req.socket.remoteAddress ?? "unknown";
+}
+
+const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
+
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body, jsonReplacer));
@@ -35,6 +46,9 @@ export function createWorker(cfg: WorkerConfig) {
   const client = createPublicClient({ chain: monadTestnet, transport: http(cfg.rpcUrl) });
   const wallet = createWalletClient({ account: operator, chain: monadTestnet, transport: http(cfg.rpcUrl) });
   const log = new DecisionLog(cfg.dataDir);
+  const limiter = new RateLimiter(cfg.rateLimitPerMin);
+  const perAccount = new KeyedMutex();
+  const mode = cfg.executionEnabled ? ("live" as const) : ("dry-run" as const);
 
   const routes: Record<string, (req: IncomingMessage, url: URL) => Promise<[number, unknown]>> = {
     "GET /health": async () => [200, { ok: true, operator: operator.address, executionEnabled: cfg.executionEnabled }],
@@ -42,10 +56,9 @@ export function createWorker(cfg: WorkerConfig) {
     "GET /operator": async () => [200, { operator: operator.address, chainId: PERPL_TESTNET.chainId }],
 
     // Operator consent (EIP-712 AssignOperator on the factory domain) so the owner can call factory.create.
+    // The caller must prove it controls `owner` (ConsentRequest signature) before the operator signs anything.
     "POST /operator/consent": async req => {
-      const body = (await readJson(req)) as { owner?: string };
-      if (!body.owner || !isAddress(body.owner)) throw new ValidationError("owner address required");
-      const owner = getAddress(body.owner);
+      const owner = await validateConsentRequest(await readJson(req), { chainId: PERPL_TESTNET.chainId, nowSec: nowSec() });
       const nonce = await client.readContract({
         address: PERPL_TESTNET.factory,
         abi: delegatedAccountFactoryAbi,
@@ -63,11 +76,9 @@ export function createWorker(cfg: WorkerConfig) {
     },
 
     "POST /plans": async req => {
-      const body = await readJson(req);
-      const nowSec = BigInt(Math.floor(Date.now() / 1000));
-      const validated = await validateSubmission(body, {
+      const validated = await validateSubmission(await readJson(req), {
         chainId: PERPL_TESTNET.chainId,
-        nowSec,
+        nowSec: nowSec(),
         isNonceUsed: (owner, nonce) => log.isNonceUsed(owner, nonce),
       });
       const base = {
@@ -77,23 +88,60 @@ export function createWorker(cfg: WorkerConfig) {
         account: validated.message.account,
         nonce: validated.message.nonce.toString(),
         planHash: validated.message.planHash,
-        mode: cfg.executionEnabled ? ("live" as const) : ("dry-run" as const),
+        mode,
       };
-      try {
-        await checkAccountOnChain(client, validated, operator.address);
-      } catch (e) {
-        log.append({ ...base, status: "rejected", detail: (e as Error).message });
-        throw e;
-      }
-      const result = await executePlan({
-        client,
-        wallet,
-        plan: validated,
-        slippageBps: cfg.slippageBps,
-        live: cfg.executionEnabled,
+      return perAccount.run(validated.message.account, async (): Promise<[number, unknown]> => {
+        try {
+          await checkAccountOnChain(client, validated, operator.address);
+        } catch (e) {
+          log.append({ ...base, status: "rejected", detail: (e as Error).message });
+          throw e;
+        }
+        const result = await executePlan({
+          client,
+          wallet,
+          plan: validated,
+          slippageBps: cfg.slippageBps,
+          live: cfg.executionEnabled,
+        });
+        log.append({ ...base, status: result.status, detail: result.orders });
+        return [200, { ...result, risk: validated.risk }];
       });
-      log.append({ ...base, status: result.status, detail: result.orders });
-      return [200, { ...result, risk: validated.risk }];
+    },
+
+    "POST /close": async req => {
+      const close = await validateClose(await readJson(req), {
+        chainId: PERPL_TESTNET.chainId,
+        nowSec: nowSec(),
+        isNonceUsed: (owner, nonce) => log.isNonceUsed(owner, nonce),
+      });
+      const base = {
+        ts: new Date().toISOString(),
+        kind: "close" as const,
+        owner: close.message.owner,
+        account: close.message.account,
+        nonce: close.message.nonce.toString(),
+        planHash: `close:${close.message.perpId}`,
+        mode,
+      };
+      return perAccount.run(close.message.account, async (): Promise<[number, unknown]> => {
+        try {
+          const result = await executeClose({
+            client,
+            wallet,
+            close,
+            slippageBps: cfg.slippageBps,
+            live: cfg.executionEnabled,
+            sideFromLog: (account, perpId) => log.sideForMarket(account, perpId, mode),
+            indexerUrl: cfg.indexerUrl,
+          });
+          log.append({ ...base, status: result.status, detail: { perpId: close.message.perpId, ...result } });
+          return [200, result];
+        } catch (e) {
+          log.append({ ...base, status: "rejected", detail: { perpId: close.message.perpId, error: (e as Error).message } });
+          throw e;
+        }
+      });
     },
 
     "GET /decisions": async (_req, url) => [200, { entries: log.recent(url.searchParams.get("account") ?? undefined) }],
@@ -112,9 +160,11 @@ export function createWorker(cfg: WorkerConfig) {
     const handler = routes[`${req.method} ${url.pathname}`];
     if (!handler) return send(res, 404, { error: "not found" });
     try {
+      if (req.method === "POST" && !limiter.take(clientKey(req, cfg.trustProxy))) throw new RateLimited();
       const [status, body] = await handler(req, url);
       send(res, status, body);
     } catch (e) {
+      if (e instanceof RateLimited) return send(res, 429, { error: "rate limited" });
       if (e instanceof ValidationError) return send(res, 400, { error: e.message, details: e.details });
       console.error(e);
       send(res, 500, { error: "internal error", message: (e as Error).message.slice(0, 300) });

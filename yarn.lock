@@ -3096,6 +3096,7 @@ __metadata:
   dependencies:
     "@omniagent/core": "workspace:*"
     "@types/node": ^22.15.0
+    esbuild: 0.28.2
     tsx: ^4.20.3
     typescript: 5.8.2
     viem: 2.31.1
@@ -8146,7 +8147,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:^0.27.0 || ^0.28.0, esbuild@npm:~0.28.0":
+"esbuild@npm:0.28.2, esbuild@npm:^0.27.0 || ^0.28.0, esbuild@npm:~0.28.0":
   version: 0.28.2
   resolution: "esbuild@npm:0.28.2"
   dependencies:

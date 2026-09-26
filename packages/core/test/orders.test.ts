@@ -82,3 +82,29 @@ describe("buildPostOnlyTestBid", () => {
     expect(() => buildPostOnlyTestBid("BTC", { ...btc, maxBidPriceONS: 0n }, 10n, 1n)).toThrow(/no bids/);
   });
 });
+
+import { buildCloseIocOrder, sideOfOpenOrderType } from "../src/perpl/orders";
+
+describe("buildCloseIocOrder", () => {
+  it("sells a long below mark and buys a short above mark, full lot, IOC", () => {
+    const cl = buildCloseIocOrder("long", "BTC", 250n, btc, { slippageBps: 50, currentBlock: 10n });
+    expect(cl.orderType).toBe(OrderDescType.CloseLong);
+    expect(cl.pricePNS).toBe(995_000n);
+    expect(cl.lotLNS).toBe(250n);
+    expect(cl.immediateOrCancel).toBe(true);
+    const cs = buildCloseIocOrder("short", "BTC", 250n, btc, { slippageBps: 50, currentBlock: 10n });
+    expect(cs.orderType).toBe(OrderDescType.CloseShort);
+    expect(cs.pricePNS).toBe(1_005_000n);
+  });
+  it("refuses an empty position or a missing mark", () => {
+    expect(() => buildCloseIocOrder("long", "BTC", 0n, btc, { slippageBps: 50, currentBlock: 1n })).toThrow(/nothing/);
+    expect(() =>
+      buildCloseIocOrder("long", "BTC", 1n, { ...btc, markPNS: 0n }, { slippageBps: 50, currentBlock: 1n }),
+    ).toThrow(/mark/);
+  });
+  it("maps only open order types to a side", () => {
+    expect(sideOfOpenOrderType(0)).toBe("long");
+    expect(sideOfOpenOrderType(1)).toBe("short");
+    expect(sideOfOpenOrderType(2)).toBeUndefined();
+  });
+});

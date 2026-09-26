@@ -5,6 +5,8 @@
 // the agent worker's decision log, and optionally the Envio indexer (history + side calibration).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  APPROVAL_DOMAIN,
+  CLOSE_APPROVAL_TYPES,
   MARKET_SYMBOLS,
   type MarketConfigSummary,
   type MarketSymbol,
@@ -38,6 +40,7 @@ const fmt = (v: number | null | undefined, digits = 2) =>
 
 type AccountView = {
   address: Address;
+  owner: Address;
   accountId: bigint;
   balanceCNS: bigint;
   lockedBalanceCNS: bigint;
@@ -48,7 +51,9 @@ type AccountView = {
 };
 
 const Dashboard: NextPage = () => {
-  const { account } = useMera();
+  const { account, walletClient } = useMera();
+  const [closing, setClosing] = useState<string>();
+  const [closeResult, setCloseResult] = useState<string>();
   const market = useMarketData();
   const [context, setContext] = useState<MarketConfigSummary[]>();
   const [contextError, setContextError] = useState<string>();
@@ -85,6 +90,7 @@ const Dashboard: NextPage = () => {
       await Promise.all(positions.map(async p => (perps[p.market] = await readPerpSnapshot(publicClient, p.market))));
       setView({
         address: target,
+        owner: acc.owner,
         accountId: acc.accountId,
         balanceCNS: acc.balanceCNS,
         lockedBalanceCNS: acc.lockedBalanceCNS,
@@ -159,6 +165,44 @@ const Dashboard: NextPage = () => {
     () => portfolioSummary(rows.filter(r => r.metrics).map(r => ({ side: r.side, metrics: r.metrics! }))),
     [rows],
   );
+
+  // Only the owner of the watched account, signed in with Mera, can close; the worker re-verifies everything.
+  const canClose = !!account && !!walletClient && !!view && view.owner === account.address;
+
+  const closePosition = async (p: OnChainPosition) => {
+    if (!canClose || !view || !account || !walletClient) return;
+    setClosing(p.market);
+    setCloseResult(undefined);
+    try {
+      const message = {
+        owner: account.address,
+        account: view.address,
+        perpId: p.perpId,
+        nonce: BigInt(Date.now()),
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
+      };
+      const signature = await walletClient.signTypedData({
+        domain: APPROVAL_DOMAIN(PERPL_TESTNET.chainId),
+        types: CLOSE_APPROVAL_TYPES,
+        primaryType: "ClosePosition",
+        message,
+      });
+      const wire = Object.fromEntries(
+        Object.entries(message).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]),
+      );
+      const r = await worker.close({ approval: { message: wire, signature } });
+      setCloseResult(
+        `${p.market}: ${String(r.mode)} · ${String(r.status)} · lado ${String(r.side)} (${String(r.sideSource)})` +
+          (r.txHash ? ` · tx ${String(r.txHash)}` : "") +
+          (r.error ? ` · ${String(r.error)}` : ""),
+      );
+      void readAccount();
+    } catch (e) {
+      setCloseResult(`${p.market}: ${(e as Error).message}`);
+    } finally {
+      setClosing(undefined);
+    }
+  };
 
   const coll = (v: bigint) => (view ? `${formatUnits(v, view.collateral.decimals)} ${view.collateral.symbol}` : "—");
   const staleSec = market.lastUpdate ? Math.round((Date.now() - market.lastUpdate) / 1000) : null;
@@ -292,6 +336,7 @@ const Dashboard: NextPage = () => {
                   <th>PnL est.</th>
                   <th>Apal. efectivo</th>
                   <th>Liq. est.</th>
+                  {canClose && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -312,11 +357,23 @@ const Dashboard: NextPage = () => {
                     <td>{fmt(m?.unrealizedPnlUsd)}</td>
                     <td>{m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"}</td>
                     <td>{fmt(m?.estLiquidationPrice)}</td>
+                    {canClose && (
+                      <td>
+                        <button
+                          className="btn btn-xs btn-outline"
+                          disabled={!!closing}
+                          onClick={() => closePosition(p)}
+                        >
+                          {closing === p.market ? "Cerrando…" : "Cerrar"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          {closeResult && <p className="text-sm break-all">{closeResult}</p>}
           <p className="text-xs opacity-60">
             Estimaciones sin funding ni fees; Perpl no publica su fórmula de margen. MM = 100 / maintenance_margin según
             los ejemplos de la documentación. El lado se obtiene del indexador (orden de apertura en la misma

@@ -20,10 +20,12 @@ export type OperatorConsent = { operator: Address; owner: Address; nonce: string
 
 export const worker = {
   health: () => call<{ ok: boolean; operator: Address; executionEnabled: boolean }>("/health"),
-  consent: (owner: Address) =>
-    call<OperatorConsent>("/operator/consent", { method: "POST", body: JSON.stringify({ owner }) }),
+  /** Body: { owner, deadline, signature } — a ConsentRequest signed by the owner (see core CONSENT_REQUEST_TYPES). */
+  consent: (body: { owner: Address; deadline: string; signature: Hex }) =>
+    call<OperatorConsent>("/operator/consent", { method: "POST", body: JSON.stringify(body) }),
   submitPlan: (body: unknown) =>
     call<Record<string, unknown>>("/plans", { method: "POST", body: JSON.stringify(body) }),
+  close: (body: unknown) => call<Record<string, unknown>>("/close", { method: "POST", body: JSON.stringify(body) }),
   decisions: (account: Address) =>
     call<{ entries: Record<string, unknown>[] }>(`/decisions?account=${encodeURIComponent(account)}`),
 };

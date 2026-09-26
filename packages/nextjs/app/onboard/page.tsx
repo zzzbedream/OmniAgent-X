@@ -4,7 +4,9 @@
 // Every write is signed by the passkey-derived owner key; the operator can never withdraw.
 import { useCallback, useEffect, useState } from "react";
 import {
+  APPROVAL_DOMAIN,
   type AllowlistChange,
+  CONSENT_REQUEST_TYPES,
   PERPL_TESTNET,
   delegatedAccountAbi,
   delegatedAccountFactoryAbi,
@@ -114,7 +116,15 @@ const Onboard: NextPage = () => {
     if (!account || !walletClient) return;
     let consent;
     try {
-      consent = await worker.consent(account.address);
+      // Prove control of the owner address before the worker signs an operator consent for it.
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+      const signature = await walletClient.signTypedData({
+        domain: APPROVAL_DOMAIN(PERPL_TESTNET.chainId),
+        types: CONSENT_REQUEST_TYPES,
+        primaryType: "ConsentRequest",
+        message: { owner: account.address, deadline },
+      });
+      consent = await worker.consent({ owner: account.address, deadline: deadline.toString(), signature });
     } catch (e) {
       push(`worker no disponible: ${(e as Error).message}`);
       return;

@@ -32,8 +32,9 @@ yarn start                                                           # PWA on :3
 
 ### Known gaps (not done, on purpose or blocked)
 - **Execution is dry-run until S2 `--test-order` passes.** Only then set `EXECUTION_ENABLED=true`.
-- No close orders. `PositionEnum` values are unverified, so the long/short side of an open position cannot be read reliably.
-- The `/operator/consent` endpoint has no auth; anyone can request consent for any owner. Harmless on testnet (the owner still has to call the factory), but not acceptable for mainnet.
+- **Close orders** exist (worker `POST /close`, dashboard button, owner-signed `ClosePosition`). The side comes from the worker's own log of orders it sent (verified enum), or from the indexer calibration. Unknown → rejected, never guessed. Close/IOC semantics are unverified on testnet.
+- `/operator/consent` requires an owner-signed `ConsentRequest`. POST routes are rate-limited per IP (in memory, per process). One execution runs at a time per account.
+- Deployment: the worker Dockerfile is verified (build, run, healthy, non-root). Vercel for the PWA is unverified. See `docs/DEPLOY.md` and `docs/DEMO.md`.
 - The daily LLM cap is per process and in memory.
 - The vault + CRE (Phase 2) has not started.
 

@@ -8,6 +8,12 @@ export type WorkerConfig = {
   executionEnabled: boolean;
   slippageBps: number;
   dataDir: string;
+  /** Requests per minute per client IP on POST routes. */
+  rateLimitPerMin: number;
+  /** Behind a reverse proxy (Railway, Fly, …): take the client IP from the first X-Forwarded-For hop. */
+  trustProxy: boolean;
+  /** Optional Envio GraphQL URL, used only as a fallback to learn a position's side. */
+  indexerUrl?: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): WorkerConfig {
@@ -30,5 +36,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     executionEnabled: env.EXECUTION_ENABLED === "true",
     slippageBps,
     dataDir: env.DATA_DIR ?? "./data",
+    rateLimitPerMin: Number(env.RATE_LIMIT_PER_MIN ?? 20),
+    trustProxy: env.TRUST_PROXY === "true",
+    indexerUrl: env.INDEXER_URL || undefined,
   };
 }

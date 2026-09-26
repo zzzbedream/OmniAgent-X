@@ -34,3 +34,30 @@ export function hashPlanOrders(plan: Pick<TradePlan, "orders">): Hex {
 export function usdToMicro(usd: number): bigint {
   return BigInt(Math.round(usd * 1_000_000));
 }
+
+/** Owner approval to close one position (the worker's endpoints are public; closing must be authorised). */
+export const CLOSE_APPROVAL_TYPES = {
+  ClosePosition: [
+    { name: "owner", type: "address" },
+    { name: "account", type: "address" },
+    { name: "perpId", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
+export type CloseApprovalMessage = {
+  owner: Address;
+  account: Address;
+  perpId: bigint;
+  nonce: bigint;
+  deadline: bigint;
+};
+
+/** Owner proof before the worker signs an operator consent for them (stops anonymous consent farming). */
+export const CONSENT_REQUEST_TYPES = {
+  ConsentRequest: [
+    { name: "owner", type: "address" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
