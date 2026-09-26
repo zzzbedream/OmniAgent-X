@@ -1,0 +1,7 @@
+# CRE project settings. RPC for Monad testnet (chain selector name: monad-testnet,
+# present in @chainlink/cre-sdk@1.22.0 generated networks). Swap the URL for a
+# QuickNode/Crouton endpoint to avoid public rate limits.
+staging-settings:
+  rpcs:
+    - chain-name: monad-testnet
+      url: https://testnet-rpc.monad.xyz

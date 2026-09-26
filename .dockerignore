@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/dist
+**/out
+**/cache
+**/data
+**/.env
+**/.env.local
+.git
+packages/foundry/lib
+cre

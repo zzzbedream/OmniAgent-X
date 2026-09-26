@@ -1,0 +1,60 @@
+# A DelegatedAccount created by the Perpl factory (the only accounts this indexer follows).
+type DelegatedAccount {
+  id: ID! # proxy address, lowercase
+  owner: String!
+  operator: String!
+  exchangeAccountId: BigInt
+  createdBlock: Int!
+}
+
+# Exchange account id → DelegatedAccount, so Exchange events (keyed by account id) can be filtered.
+type TrackedAccount {
+  id: ID! # exchange account id, decimal string
+  delegatedAccount: String!
+  balanceCNS: BigInt!
+  updatedBlock: Int!
+}
+
+# Latest order request per (tx, account, market), used to learn the side of the position it opens.
+type OrderIntent {
+  id: ID! # txHash-accountId-perpId
+  orderType: Int! # on-chain OrderDescEnum: 0 OpenLong, 1 OpenShort, 2 CloseLong, 3 CloseShort, ...
+}
+
+# Empirical map from the (undocumented) on-chain PositionEnum value to a side,
+# learned from positions opened by OpenLong / OpenShort orders in the same transaction.
+type SideCalibration {
+  id: ID! # raw positionType value
+  longCount: Int!
+  shortCount: Int!
+}
+
+type Position {
+  id: ID! # accountId-perpId
+  accountId: BigInt!
+  perpId: BigInt!
+  positionTypeRaw: Int!
+  side: String! # long | short | unknown
+  lotLNS: BigInt!
+  depositCNS: BigInt!
+  entryPricePNS: BigInt!
+  leverageHdths: BigInt!
+  status: String! # open | closed | liquidated
+  realizedPnlCNS: BigInt!
+  updatedBlock: Int!
+}
+
+type AccountEvent {
+  id: ID! # txHash-logIndex
+  accountId: BigInt!
+  kind: String! # deposit | withdrawal | order | fill | open | increase | decrease | close | invert | liquidation
+  perpId: BigInt
+  side: String
+  pricePNS: BigInt
+  lotLNS: BigInt
+  amountCNS: BigInt
+  fundingCNS: BigInt
+  block: Int!
+  timestamp: Int!
+  txHash: String!
+}
