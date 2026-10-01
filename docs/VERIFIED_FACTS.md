@@ -104,3 +104,42 @@ environment, so anything that only those sites would confirm is marked **UNVERIF
 - Perpl event params are not `indexed`. HyperSync cannot filter by account, so the indexer filters in its handlers against factory-created accounts.
 - `maintenance_margin` / `initial_margin` in `/v1/pub/context`: the docs say "hundredths" but give `2000 = 5%` and `1000 = 10%`. `fraction = 100 / raw` fits both examples; that is an inference.
 - The Envio CLI 3.12.1 HyperSync chain table includes `monad-testnet` (read from the native binary). HyperSync requires an `ENVIO_API_TOKEN`.
+
+## Spike S6: vibe/vibe (Robinhood Chain testnet), out of Monad scope (2026-10-01)
+Context: an unsolicited DM invited us to launch a token on `testnet.vibevibe.fun`. This read-only spike checks what it is before spending any time on it. No wallet was connected, nothing was signed, nothing was deposited.
+
+- **Different chain.** It runs on Robinhood Chain testnet. Checked with `cast chain-id` and `cast block-number` against `https://rpc.testnet.chain.robinhood.com`: chain ID `46630`, head block `127,316,903` on 2026-10-01.
+  - Explorer: `https://explorer.testnet.chain.robinhood.com`.
+  - It is **not Monad**. A token or app there counts toward no Metropolis track or bounty.
+- **What it is.** A permissionless bonding-curve token launchpad by Seedify.
+  - Per its public config, `GET https://testnet.vibevibe.fun/api/v1/chains/46630/config` (no API key):
+    - policy `seedify-curve-v3-testnet-5eth-2pct-3pct-creator-125bps-75-25`, supply 1e9 tokens;
+    - curve fee 125 bps, split 75% creator / 25% protocol;
+    - graduation at 5 ETH net, creation fee 0.0005 ETH, wallet cap 2%;
+    - transfers locked until graduation, buybacks sent to a burn address;
+    - after graduation, trading uses Uniswap v4 contracts (pool manager, universal router, Permit2).
+  - The bare `/api/v1/chains/46630/` route returns 404.
+- **Factories.** All three still have code and still mint launches (`cast code`, `cast call launchCount()`, 2026-10-01):
+
+  | Generation | Factory | `launchCount()` |
+  |---|---|---|
+  | current (in config `deployments`) | `0x40f1be6faf8DAB9C143cce1a0A04c2075Fb2DF59` | 142,243 |
+  | legacy (in `legacyPublicGraphs`) | `0xB5B7A2f6c4EAFa2D73918fcA32d50e2126339eb9` | 46,151 |
+  | retired (no longer listed) | `0x4FEbC267e0C24440bcDEF72B5DBC5FE7BED091dF` | 14,811 |
+
+  - The legacy and retired addresses, and the finding that the retired factory charges 100 bps at a 50/50 split, come from the community indexer `github.com/itstorvian/vibevibe-testnet-indexer` (`config/factories.ts`).
+  - That repo is unofficial. We re-read only `launchCount()` and the bytecode.
+- **Terms** (text embedded in the site bundle, legal version `2026-08-29-v2-v3`):
+  - Operated by SPARK LABS ORGANIZATION, S.A. (Panama). Disputes go to binding arbitration in Panama City.
+  - "test ETH, testnet tokens, fees, and rankings have no monetary value".
+  - Rewards: the operator "intends, at its sole and absolute discretion, to recognise recorded testnet participation if a future mainnet token is ever created". It also says "No program is offered or promised".
+  - It disqualifies sybil activity, wash trading and automated abuse.
+  - The community indexer reports that the terms disable mainnet chain 4663. **UNVERIFIED** here.
+- **UNVERIFIED:** the "builder role" program requirements, any vibe/vibe deployment on Monad, and an official Discord link. Take the Discord link only from the official X account `@vibevibefun`, never from a DM.
+
+**Decision: no-go for the hackathon build.** Revisit only if all three hold:
+1. The Phase 0 gates pass.
+2. The core demo works end to end.
+3. The hackathon rules allow a token launch.
+
+Any experiment uses a fresh burner wallet. Wallet approvals on testnet are still real signatures.
