@@ -167,7 +167,7 @@ const Intent: NextPage = () => {
         disabled={!!loading || !(Number(budget) > 0) || !account || !delegated}
         onClick={plan}
       >
-        {loading === "plan" ? "Consultando Kimi y Qwen…" : "Generar plan"}
+        {loading === "plan" ? "Consultando al modelo…" : "Generar plan"}
       </button>
 
       {err && <p className="text-error text-sm break-words">{err}</p>}

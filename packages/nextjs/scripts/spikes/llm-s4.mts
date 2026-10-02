@@ -1,9 +1,6 @@
-// Spike S4 (docs/PLAN.md §4): Qwen and Kimi return schema-valid JSON at temperature 0; measure latency and tokens.
-//
-// Both providers expose OpenAI-compatible /chat/completions. Base URLs and model ids are NOT hard-coded
-// because they were not verified from primary docs in this environment — take them from your provider console:
-//   QWEN_BASE_URL=...  QWEN_API_KEY=...  QWEN_MODEL=qwen3.8-max
-//   KIMI_BASE_URL=...  KIMI_API_KEY=...  KIMI_MODEL=<id shown by platform.moonshot.ai>
+// Spike S4 (docs/PLAN.md §4): the configured LLM returns schema-valid JSON at temperature 0; measure latency
+// and tokens. Same env vars as the app (OpenAI-compatible /chat/completions):
+//   LLM_BASE_URL=https://api.deepseek.com  LLM_API_KEY=...  LLM_MODEL=deepseek-flash  [LLM_PLANNER_MODEL=deepseek-v4-pro]
 // Run (from packages/nextjs): node --experimental-strip-types scripts/spikes/llm-s4.mts [runs=3]
 import { z } from "zod";
 
@@ -27,9 +24,10 @@ Constraints: total notional <= budget, leverage 1-5, at most 4 orders, rationale
 const USER = `Budget: 1000 USD. Intent: "Hedge ETH short during high volatility, keep the rest idle." Current ETH 24h realized vol: 4.1%.`;
 
 type Provider = { name: string; baseUrl?: string; apiKey?: string; model?: string };
+const { LLM_BASE_URL: baseUrl, LLM_API_KEY: apiKey, LLM_MODEL, LLM_PLANNER_MODEL } = process.env;
 const providers: Provider[] = [
-  { name: "qwen", baseUrl: process.env.QWEN_BASE_URL, apiKey: process.env.QWEN_API_KEY, model: process.env.QWEN_MODEL },
-  { name: "kimi", baseUrl: process.env.KIMI_BASE_URL, apiKey: process.env.KIMI_API_KEY, model: process.env.KIMI_MODEL },
+  { name: "LLM_MODEL", baseUrl, apiKey, model: LLM_MODEL },
+  ...(LLM_PLANNER_MODEL ? [{ name: "LLM_PLANNER_MODEL", baseUrl, apiKey, model: LLM_PLANNER_MODEL }] : []),
 ];
 const runs = Number(process.argv[2] ?? 3);
 
@@ -41,6 +39,7 @@ async function callOnce(p: Required<Provider>) {
     body: JSON.stringify({
       model: p.model,
       temperature: 0,
+      max_tokens: 2048,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM },
@@ -71,7 +70,7 @@ async function callOnce(p: Required<Provider>) {
 
 for (const p of providers) {
   if (!p.baseUrl || !p.apiKey || !p.model) {
-    console.log(`SKIP  ${p.name}: set ${p.name.toUpperCase()}_BASE_URL, _API_KEY and _MODEL`);
+    console.log(`SKIP  ${p.name}: set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL`);
     continue;
   }
   const outputs = new Set<string>();

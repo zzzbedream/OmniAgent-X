@@ -1,4 +1,5 @@
-// POST /api/strategy — natural-language intent → Kimi (parse) → Qwen (plan) → risk policy.
+// POST /api/strategy — natural-language intent → parser model → planner model → risk policy.
+// The provider is configured with LLM_* env vars (DeepSeek in the MVP).
 // Server-only: API keys never reach the browser. Nothing here executes trades; the user must sign
 // the resulting plan and the worker re-validates it.
 //
@@ -17,7 +18,7 @@ import {
   PERPL_TESTNET,
   RequestAuthError,
   hashPlanOrders,
-  llmConfigFromEnv,
+  llmRolesFromEnv,
   readDelegatedAccount,
   readPerpSnapshot,
   runPlanningPipeline,
@@ -63,13 +64,8 @@ export async function POST(req: Request) {
   if (!parsed.success)
     return NextResponse.json({ error: "invalid body", details: parsed.error.issues }, { status: 400 });
 
-  const kimi = llmConfigFromEnv("KIMI", process.env);
-  const qwen = llmConfigFromEnv("QWEN", process.env);
-  const missing = [
-    !kimi && "KIMI_BASE_URL/KIMI_API_KEY/KIMI_MODEL",
-    !qwen && "QWEN_BASE_URL/QWEN_API_KEY/QWEN_MODEL",
-  ].filter(Boolean);
-  if (!kimi || !qwen) return NextResponse.json({ error: "LLM not configured", missing }, { status: 503 });
+  const { roles, missing } = llmRolesFromEnv(process.env);
+  if (!roles) return NextResponse.json({ error: "LLM not configured", missing }, { status: 503 });
 
   let caller: Awaited<ReturnType<typeof verifyPlanRequest>>;
   try {
@@ -114,8 +110,8 @@ export async function POST(req: Request) {
       request: parsed.data.request,
       budgetUsd: parsed.data.budgetUsd,
       quotes,
-      kimi,
-      qwen,
+      parser: roles.parser,
+      planner: roles.planner,
     });
     return NextResponse.json({
       budgetUsd: out.budgetUsd,
@@ -125,8 +121,8 @@ export async function POST(req: Request) {
       planHash: hashPlanOrders(out.plan.data),
       risk: out.risk,
       telemetry: {
-        kimi: { model: out.intent.model, latencyMs: out.intent.latencyMs, usage: out.intent.usage },
-        qwen: { model: out.plan.model, latencyMs: out.plan.latencyMs, usage: out.plan.usage },
+        parser: { model: out.intent.model, latencyMs: out.intent.latencyMs, usage: out.intent.usage },
+        planner: { model: out.plan.model, latencyMs: out.plan.latencyMs, usage: out.plan.usage },
       },
     });
   } catch (e) {

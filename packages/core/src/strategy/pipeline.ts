@@ -1,4 +1,5 @@
-// Intent → plan pipeline: Kimi parses the request, Qwen sizes the plan, the risk policy decides.
+// Intent → plan pipeline: the parser model reads the request, the planner model sizes the plan, and the
+// deterministic risk policy decides. Both roles may be the same model (see llmRolesFromEnv).
 import type { MarketSymbol } from "../perpl/network";
 import { type LlmConfig, type LlmResult, chatJson } from "./llm";
 import { DEFAULT_TESTNET_POLICY, type RiskPolicy, type RiskReport, evaluatePlan } from "./risk";
@@ -34,13 +35,13 @@ export async function runPlanningPipeline(args: {
   request: string;
   budgetUsd: number;
   quotes: MarketQuote[];
-  kimi: LlmConfig;
-  qwen: LlmConfig;
+  parser: LlmConfig;
+  planner: LlmConfig;
   policy?: RiskPolicy;
   fetchImpl?: typeof fetch;
 }): Promise<PlanOutcome> {
   const policy = args.policy ?? DEFAULT_TESTNET_POLICY;
-  const intent = await chatJson(args.kimi, IntentParamsSchema, INTENT_SYSTEM, args.request, args.fetchImpl);
+  const intent = await chatJson(args.parser, IntentParamsSchema, INTENT_SYSTEM, args.request, args.fetchImpl);
   // The UI budget is authoritative; a budget typed in the free text is only informative.
   const budgetUsd = args.budgetUsd;
   const planUser = JSON.stringify({
@@ -49,6 +50,6 @@ export async function runPlanningPipeline(args: {
     parsedIntent: intent.data,
     markets: args.quotes,
   });
-  const plan = await chatJson(args.qwen, TradePlanSchema, planSystem(policy), planUser, args.fetchImpl);
+  const plan = await chatJson(args.planner, TradePlanSchema, planSystem(policy), planUser, args.fetchImpl);
   return { intent, plan, risk: evaluatePlan(plan.data, budgetUsd, policy), budgetUsd };
 }

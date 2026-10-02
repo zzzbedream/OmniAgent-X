@@ -3,7 +3,7 @@ import { MARKET_SYMBOLS, type MarketSymbol } from "../perpl/network";
 
 const marketEnum = z.enum(MARKET_SYMBOLS as [MarketSymbol, ...MarketSymbol[]]);
 
-/** Output of the intent-parsing step (Kimi): what the user asked for, no numbers invented. */
+/** Output of the intent-parsing step (parser model): what the user asked for, no numbers invented. */
 export const IntentParamsSchema = z.object({
   budgetUsd: z.number().positive().nullable(),
   markets: z.array(marketEnum).max(4),
@@ -22,7 +22,7 @@ export const PlannedOrderSchema = z.object({
 });
 export type PlannedOrder = z.infer<typeof PlannedOrderSchema>;
 
-/** Output of the planning step (Qwen). Deterministic checks run after this; nothing executes unchecked. */
+/** Output of the planning step (planner model). Deterministic checks run after this; nothing executes unchecked. */
 export const TradePlanSchema = z.object({
   orders: z.array(PlannedOrderSchema).max(8),
   summary: z.string().max(600),
