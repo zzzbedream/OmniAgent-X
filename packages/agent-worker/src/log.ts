@@ -6,13 +6,15 @@ import { join } from "node:path";
 
 export type DecisionEntry = {
   ts: string;
-  kind: "plan" | "close";
+  /** guardian = an action the guardian took; mandate/revoke = owner-signed activation and revocation. */
+  kind: "plan" | "close" | "guardian" | "mandate" | "revoke";
   owner: string;
   account: string;
   nonce: string;
+  /** Plan hash, or the mandate hash for guardian entries. */
   planHash: string;
   mode: "dry-run" | "live";
-  status: "pending" | "rejected" | "built" | "sent" | "partial" | "failed";
+  status: "pending" | "rejected" | "built" | "sent" | "partial" | "failed" | "active" | "revoked";
   detail?: unknown;
 };
 
@@ -68,7 +70,9 @@ export class DecisionLog {
   sideForMarket(account: string, perpId: bigint, mode: "dry-run" | "live"): "long" | "short" | undefined {
     for (const e of this.all().reverse()) {
       if (e.account.toLowerCase() !== account.toLowerCase() || e.mode !== mode) continue;
-      if (e.kind === "close" && e.status === "sent" && (e.detail as { perpId?: string })?.perpId === perpId.toString()) {
+      const d = e.detail as { perpId?: string; type?: string } | undefined;
+      const closedHere = e.kind === "close" || (e.kind === "guardian" && d?.type === "close");
+      if (closedHere && e.status === "sent" && d?.perpId === perpId.toString()) {
         return undefined; // closed after the last open
       }
       if (e.kind !== "plan" || !Array.isArray(e.detail)) continue;

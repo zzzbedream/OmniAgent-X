@@ -12,6 +12,8 @@ const EXPECTED: Record<string, string> = {
   getAccountById: "0x05aca141",
   getPerpetualInfo: "0x00092cce",
   getPosition: "0x751de421",
+  // Same selector as the allowlist entry (allowlist.ts, from solc --hashes).
+  increasePositionCollateral: "0xf769f0d3",
 };
 
 describe("hand-written Exchange ABI", () => {
@@ -25,5 +27,11 @@ describe("hand-written Exchange ABI", () => {
     const execOrder = exchangeAbi.find(f => f.type === "function" && f.name === "execOrder")!;
     expect(toFunctionSelector(execOrder)).toBe(EXEC_ORDER_SELECTOR);
     expect(CURRENT_OPERATOR_SELECTORS.map(s => s.selector)).toContain(EXEC_ORDER_SELECTOR);
+  });
+  it("calls increasePositionCollateral with a selector the operator allowlist grants", () => {
+    const f = exchangeAbi.find(x => x.type === "function" && x.name === "increasePositionCollateral");
+    expect(f).toBeDefined();
+    const granted = CURRENT_OPERATOR_SELECTORS.find(s => s.name === "increasePositionCollateral")!.selector;
+    expect(toFunctionSelector(f!)).toBe(granted);
   });
 });

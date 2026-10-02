@@ -49,6 +49,15 @@ describe("worker HTTP", () => {
     expect(r.status).toBe(400);
     expect((await fetch(`${base}/nope`)).status).toBe(404);
   });
+  it("exposes guardian status and validates mandates before touching the chain", async () => {
+    const health = (await (await fetch(`${base}/health`)).json()) as { guardian: { addCollateralEnabled: boolean } };
+    expect(health.guardian.addCollateralEnabled).toBe(false);
+    const status = await fetch(`${base}/guardian/status?account=0x000000000000000000000000000000000000dEaD`);
+    expect(await status.json()).toMatchObject({ active: false, mode: "dry-run" });
+    expect((await fetch(`${base}/guardian/status?account=nope`)).status).toBe(400);
+    expect((await fetch(`${base}/guardian/mandates`, { method: "POST", body: "{}" })).status).toBe(400);
+    expect((await fetch(`${base}/guardian/revoke`, { method: "POST", body: "{}" })).status).toBe(400);
+  });
   it("rate-limits POST routes per client", async () => {
     const statuses: number[] = [];
     for (let i = 0; i < 8; i++) statuses.push((await fetch(`${base}/close`, { method: "POST", body: "{}" })).status);

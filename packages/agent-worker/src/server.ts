@@ -1,13 +1,28 @@
-import { ASSIGN_OPERATOR_TYPES, FACTORY_EIP712_DOMAIN, PERPL_TESTNET, delegatedAccountFactoryAbi } from "@omniagent/core";
+import {
+  ASSIGN_OPERATOR_TYPES,
+  FACTORY_EIP712_DOMAIN,
+  PERPL_TESTNET,
+  delegatedAccountFactoryAbi,
+  describeMandate,
+} from "@omniagent/core";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, getAddress, http, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
 import type { WorkerConfig } from "./config";
-import { checkAccountOnChain, executeClose, executePlan } from "./executor";
+import { checkAccountAccess, checkAccountOnChain, executeClose, executeGuardianAction, executePlan } from "./executor";
+import { GuardianLoop, GuardianStore } from "./guardian";
+import { makePositionReader } from "./guardianChain";
 import { DecisionLog, jsonReplacer } from "./log";
 import { KeyedMutex, RateLimiter } from "./rateLimit";
-import { ValidationError, validateClose, validateConsentRequest, validateSubmission } from "./validate";
+import {
+  ValidationError,
+  validateClose,
+  validateConsentRequest,
+  validateMandateSubmission,
+  validateRevoke,
+  validateSubmission,
+} from "./validate";
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -49,9 +64,37 @@ export function createWorker(cfg: WorkerConfig) {
   const limiter = new RateLimiter(cfg.rateLimitPerMin);
   const perAccount = new KeyedMutex();
   const mode = cfg.executionEnabled ? ("live" as const) : ("dry-run" as const);
+  const guardianStore = new GuardianStore(cfg.dataDir);
+  const guardianLoop = new GuardianLoop({
+    store: guardianStore,
+    log,
+    mode,
+    addCollateralEnabled: cfg.guardianAddCollateral,
+    readPositions: makePositionReader({ client, log, mode, perplApiUrl: cfg.perplApiUrl, indexerUrl: cfg.indexerUrl }),
+    execute: async (rec, action, position) => {
+      // The engine never acts on an unknown side; this guards the executor against a future engine bug.
+      if (position.side === "unknown") return { status: "failed", error: "position side unknown" };
+      return executeGuardianAction({
+        client,
+        wallet,
+        owner: rec.owner,
+        account: rec.account,
+        action,
+        side: position.side,
+        slippageBps: cfg.slippageBps,
+        live: cfg.executionEnabled,
+      });
+    },
+    withLock: (account, fn) => perAccount.run(account, fn),
+    now: () => Math.floor(Date.now() / 1000),
+  });
+  const guardianInfo = { intervalMs: cfg.guardianIntervalMs, addCollateralEnabled: cfg.guardianAddCollateral };
 
   const routes: Record<string, (req: IncomingMessage, url: URL) => Promise<[number, unknown]>> = {
-    "GET /health": async () => [200, { ok: true, operator: operator.address, executionEnabled: cfg.executionEnabled }],
+    "GET /health": async () => [
+      200,
+      { ok: true, operator: operator.address, executionEnabled: cfg.executionEnabled, guardian: guardianInfo },
+    ],
 
     "GET /operator": async () => [200, { operator: operator.address, chainId: PERPL_TESTNET.chainId }],
 
@@ -148,9 +191,95 @@ export function createWorker(cfg: WorkerConfig) {
     },
 
     "GET /decisions": async (_req, url) => [200, { entries: log.recent(url.searchParams.get("account") ?? undefined) }],
+
+    // Owner-signed guardian mandate. One per account; a new one replaces the old.
+    "POST /guardian/mandates": async req => {
+      const v = await validateMandateSubmission(await readJson(req), {
+        chainId: PERPL_TESTNET.chainId,
+        nowSec: nowSec(),
+        isNonceUsed: (owner, nonce) => log.isNonceUsed(owner, nonce),
+      });
+      const { owner, account, nonce, expiresAt } = v.message;
+      const base = {
+        ts: new Date().toISOString(),
+        kind: "mandate" as const,
+        owner,
+        account,
+        nonce: nonce.toString(),
+        planHash: v.mandateHash,
+        mode,
+      };
+      return perAccount.run(account, async (): Promise<[number, unknown]> => {
+        if (!log.reserve(base)) throw new ValidationError("mandate nonce already used");
+        try {
+          await checkAccountAccess(client, owner, account, operator.address);
+        } catch (e) {
+          log.append({ ...base, status: "rejected", detail: (e as Error).message });
+          throw e;
+        }
+        const now = Number(nowSec());
+        guardianStore.activate(
+          { owner, account, mandate: v.mandate, mandateHash: v.mandateHash, nonce: base.nonce, expiresAt: Number(expiresAt), activatedAt: now },
+          now,
+        );
+        const lines = describeMandate(v.mandate);
+        log.append({ ...base, status: "active", detail: { lines, expiresAt: expiresAt.toString() } });
+        return [200, { active: true, mandateHash: v.mandateHash, expiresAt: expiresAt.toString(), lines, mode, guardian: guardianInfo }];
+      });
+    },
+
+    "POST /guardian/revoke": async req => {
+      const { message } = await validateRevoke(await readJson(req), {
+        chainId: PERPL_TESTNET.chainId,
+        nowSec: nowSec(),
+        isNonceUsed: (owner, nonce) => log.isNonceUsed(owner, nonce),
+      });
+      return perAccount.run(message.account, async (): Promise<[number, unknown]> => {
+        const rec = guardianStore.get(message.account);
+        if (!rec || getAddress(rec.owner) !== message.owner) {
+          throw new ValidationError("no active mandate for this owner and account");
+        }
+        const base = {
+          ts: new Date().toISOString(),
+          kind: "revoke" as const,
+          owner: message.owner,
+          account: message.account,
+          nonce: message.nonce.toString(),
+          planHash: rec.mandateHash,
+          mode,
+        };
+        if (!log.reserve(base)) throw new ValidationError("revocation nonce already used");
+        guardianStore.revoke(message.account);
+        log.append({ ...base, status: "revoked" });
+        return [200, { active: false }];
+      });
+    },
+
+    "GET /guardian/status": async (_req, url) => {
+      const account = url.searchParams.get("account");
+      if (!account || !isAddress(account)) throw new ValidationError("account must be an address");
+      const now = Number(nowSec());
+      const rec = guardianStore.get(account);
+      if (!rec || rec.expiresAt <= now) return [200, { active: false, mode, guardian: guardianInfo }];
+      return [
+        200,
+        {
+          active: true,
+          mode,
+          guardian: guardianInfo,
+          mandate: rec.mandate,
+          mandateHash: rec.mandateHash,
+          lines: describeMandate(rec.mandate),
+          expiresAt: rec.expiresAt,
+          activatedAt: rec.activatedAt,
+          state: guardianStore.stateFor(account, now),
+          lastTick: guardianLoop.status(account),
+        },
+      ];
+    },
   };
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     if (origin && cfg.allowedOrigins.includes(origin)) {
       res.setHeader("access-control-allow-origin", origin);
@@ -173,4 +302,7 @@ export function createWorker(cfg: WorkerConfig) {
       send(res, 500, { error: "internal error", message: (e as Error).message.slice(0, 300) });
     }
   });
+  guardianLoop.start(cfg.guardianIntervalMs);
+  server.on("close", () => guardianLoop.stop());
+  return server;
 }

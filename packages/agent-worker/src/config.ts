@@ -14,6 +14,12 @@ export type WorkerConfig = {
   trustProxy: boolean;
   /** Optional Envio GraphQL URL, used only as a fallback to learn a position's side. */
   indexerUrl?: string;
+  /** Guardian tick period; 0 disables the loop (mandates are still accepted and stored). */
+  guardianIntervalMs: number;
+  /** Allow collateral top-ups. Off until increasePositionCollateral is proven on testnet (S2-bis). */
+  guardianAddCollateral: boolean;
+  /** Perpl REST base, for the maintenance margins in /v1/pub/context. */
+  perplApiUrl: string;
 };
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): WorkerConfig {
@@ -24,6 +30,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const slippageBps = Number(env.SLIPPAGE_BPS ?? 50);
   if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 1000) {
     throw new Error("SLIPPAGE_BPS must be an integer in [0, 1000]");
+  }
+  const guardianIntervalMs = Number(env.GUARDIAN_INTERVAL_MS ?? 5000);
+  if (!Number.isInteger(guardianIntervalMs) || guardianIntervalMs < 0 || (guardianIntervalMs > 0 && guardianIntervalMs < 1000)) {
+    throw new Error("GUARDIAN_INTERVAL_MS must be 0 (off) or an integer >= 1000");
   }
   return {
     operatorPk: operatorPk as Hex,
@@ -39,5 +49,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     rateLimitPerMin: Number(env.RATE_LIMIT_PER_MIN ?? 20),
     trustProxy: env.TRUST_PROXY === "true",
     indexerUrl: env.INDEXER_URL || undefined,
+    guardianIntervalMs,
+    guardianAddCollateral: env.GUARDIAN_ADD_COLLATERAL === "true",
+    perplApiUrl: env.PERPL_API_URL || "https://testnet.perpl.xyz/api",
   };
 }

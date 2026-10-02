@@ -3,7 +3,9 @@
 // call to the Exchange only for allow-listed selectors (execOrder is on the default allowlist).
 import {
   EXEC_ORDER_SELECTOR,
+  type GuardianAction,
   type OrderDesc,
+  PERPL_TESTNET,
   buildCloseIocOrder,
   buildOpenIocOrder,
   delegatedAccountAbi,
@@ -23,6 +25,7 @@ import {
   type WalletClient,
   encodeFunctionData,
 } from "viem";
+import type { ExecutionOutcome } from "./guardian";
 import { MARKET_BY_PERP, ValidationError, type ValidatedClose, type ValidatedPlan } from "./validate";
 
 export type ExecutionResult = {
@@ -86,17 +89,7 @@ export async function executePlan(args: {
   const results: ExecutionResult["orders"] = [];
   for (const b of built) {
     try {
-      // Target is the DelegatedAccount, not the Exchange: its fallback forwards allow-listed calls.
-      const { request } = await client.simulateContract({
-        account: wallet.account,
-        address: plan.message.account,
-        abi: exchangeAbi,
-        functionName: "execOrder",
-        args: [b.order],
-      });
-      const txHash = await wallet.writeContract(request);
-      const receipt = await client.waitForTransactionReceipt({ hash: txHash });
-      if (receipt.status !== "success") throw new Error(`reverted in tx ${txHash}`);
+      const txHash = await sendExecOrder(client, wallet, plan.message.account, b.order);
       results.push({ ...b, txHash });
     } catch (e) {
       results.push({ ...b, error: (e as Error).message.slice(0, 500) });
@@ -109,9 +102,45 @@ export async function executePlan(args: {
   return { mode: "live", status, orders: results };
 }
 
+type OperatorWallet = WalletClient<Transport, Chain, Account>;
+
+async function confirmed(client: PublicClient, txHash: Hex): Promise<Hex> {
+  const receipt = await client.waitForTransactionReceipt({ hash: txHash });
+  if (receipt.status !== "success") throw new Error(`reverted in tx ${txHash}`);
+  return txHash;
+}
+
+// Both senders target the DelegatedAccount, not the Exchange: its fallback forwards allow-listed selectors.
+async function sendExecOrder(client: PublicClient, wallet: OperatorWallet, account: Address, order: OrderDesc) {
+  const { request } = await client.simulateContract({
+    account: wallet.account,
+    address: account,
+    abi: exchangeAbi,
+    functionName: "execOrder",
+    args: [order],
+  });
+  return confirmed(client, await wallet.writeContract(request));
+}
+
+async function sendIncreaseCollateral(
+  client: PublicClient,
+  wallet: OperatorWallet,
+  account: Address,
+  perpId: bigint,
+  amountCNS: bigint,
+) {
+  const { request } = await client.simulateContract({
+    account: wallet.account,
+    address: account,
+    abi: exchangeAbi,
+    functionName: "increasePositionCollateral",
+    args: [perpId, amountCNS],
+  });
+  return confirmed(client, await wallet.writeContract(request));
+}
 
 /** Envio calibration fallback: raw PositionEnum → side, only when every observation agrees. */
-async function sideFromIndexer(indexerUrl: string, positionTypeRaw: number): Promise<"long" | "short" | undefined> {
+export async function sideFromIndexer(indexerUrl: string, positionTypeRaw: number): Promise<"long" | "short" | undefined> {
   try {
     const res = await fetch(indexerUrl, {
       method: "POST",
@@ -181,18 +210,46 @@ export async function executeClose(args: {
   if (!live) return { mode: "dry-run", status: "built", side, sideSource, order, calldata };
 
   try {
-    const { request } = await client.simulateContract({
-      account: wallet.account,
-      address: account,
-      abi: exchangeAbi,
-      functionName: "execOrder",
-      args: [order],
-    });
-    const txHash = await wallet.writeContract(request);
-    const receipt = await client.waitForTransactionReceipt({ hash: txHash });
-    if (receipt.status !== "success") throw new Error(`reverted in tx ${txHash}`);
+    const txHash = await sendExecOrder(client, wallet, account, order);
     return { mode: "live", status: "sent", side, sideSource, order, calldata, txHash };
   } catch (e) {
     return { mode: "live", status: "failed", side, sideSource, order, calldata, error: (e as Error).message.slice(0, 500) };
+  }
+}
+
+/**
+ * Executes one guardian action through the operator. The mandate the owner signed is the authorisation,
+ * so there is no per-action signature; owner, operator and allowlist are still checked on-chain first.
+ * Reductions and closes are IOC close orders; a top-up is Exchange.increasePositionCollateral.
+ */
+export async function executeGuardianAction(args: {
+  client: PublicClient;
+  wallet: WalletClient<Transport, Chain, Account>;
+  owner: Address;
+  account: Address;
+  action: GuardianAction;
+  side: "long" | "short";
+  slippageBps: number;
+  live: boolean;
+}): Promise<ExecutionOutcome> {
+  const { client, wallet, owner, account, action, live } = args;
+  await checkAccountAccess(client, owner, account, wallet.account.address);
+  try {
+    if (action.type === "addCollateral") {
+      const collateral = await readCollateral(client);
+      const amountCNS = BigInt(Math.round(action.usd * 10 ** collateral.decimals));
+      if (!live) return { status: "built" };
+      const perpId = PERPL_TESTNET.markets[action.market];
+      return { status: "sent", txHash: await sendIncreaseCollateral(client, wallet, account, perpId, amountCNS) };
+    }
+    const perp = await readPerpSnapshot(client, action.market);
+    const order = buildCloseIocOrder(args.side, action.market, action.lotLNS, perp, {
+      slippageBps: args.slippageBps,
+      currentBlock: await client.getBlockNumber(),
+    });
+    if (!live) return { status: "built" };
+    return { status: "sent", txHash: await sendExecOrder(client, wallet, account, order) };
+  } catch (e) {
+    return { status: "failed", error: (e as Error).message.slice(0, 500) };
   }
 }

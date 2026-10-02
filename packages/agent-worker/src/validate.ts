@@ -5,6 +5,10 @@ import {
   CLOSE_APPROVAL_TYPES,
   CONSENT_REQUEST_TYPES,
   type CloseApprovalMessage,
+  GUARDIAN_MANDATE_TYPES,
+  GUARDIAN_REVOKE_TYPES,
+  type GuardianMandate,
+  GuardianMandateSchema,
   type MarketSymbol,
   PERPL_TESTNET,
   PLAN_APPROVAL_TYPES,
@@ -13,8 +17,10 @@ import {
   type TradePlan,
   TradePlanSchema,
   evaluatePlan,
+  hashMandate,
   hashPlanOrders,
   usdToMicro,
+  validateMandate,
 } from "@omniagent/core";
 import { type Address, type Hex, getAddress, isAddress, recoverTypedDataAddress } from "viem";
 import { z } from "zod";
@@ -176,4 +182,100 @@ export async function validateConsentRequest(body: unknown, opts: { chainId: num
   });
   if (signer !== owner) throw new ValidationError("consent request is not signed by the owner");
   return owner;
+}
+
+// ── Guardian mandates ───────────────────────────────────────────────────────
+
+/** A mandate is a standing authorisation, so it must expire; 30 days covers the hackathon demo window. */
+export const MAX_MANDATE_TTL_SEC = 30 * 86_400;
+
+export const SubmitMandateSchema = z.object({
+  mandate: GuardianMandateSchema,
+  approval: z.object({
+    message: z.object({ owner: addr, account: addr, mandateHash: bytes32, nonce: uintString, expiresAt: uintString }),
+    signature: signature65,
+  }),
+});
+
+export type GuardianMandateMessage = {
+  owner: Address;
+  account: Address;
+  mandateHash: Hex;
+  nonce: bigint;
+  expiresAt: bigint;
+};
+
+export type ValidatedMandate = { mandate: GuardianMandate; mandateHash: Hex; message: GuardianMandateMessage; signature: Hex };
+
+export async function validateMandateSubmission(
+  body: unknown,
+  opts: { chainId: number; nowSec: bigint; isNonceUsed: (owner: Address, nonce: bigint) => boolean },
+): Promise<ValidatedMandate> {
+  const parsed = SubmitMandateSchema.safeParse(body);
+  if (!parsed.success) throw new ValidationError("malformed request", parsed.error.issues);
+  const { mandate, approval } = parsed.data;
+
+  const violations = validateMandate(mandate);
+  if (violations.length > 0) throw new ValidationError("mandate violates its own limits", violations);
+
+  const m = approval.message;
+  const message: GuardianMandateMessage = {
+    owner: getAddress(m.owner),
+    account: getAddress(m.account),
+    mandateHash: m.mandateHash as Hex,
+    nonce: BigInt(m.nonce),
+    expiresAt: BigInt(m.expiresAt),
+  };
+  const mandateHash = hashMandate(mandate);
+  if (message.mandateHash !== mandateHash) throw new ValidationError("mandateHash does not match the mandate");
+  if (message.expiresAt <= opts.nowSec) throw new ValidationError("mandate expired");
+  if (message.expiresAt > opts.nowSec + BigInt(MAX_MANDATE_TTL_SEC)) {
+    throw new ValidationError("mandate expiry too far in the future");
+  }
+  if (opts.isNonceUsed(message.owner, message.nonce)) throw new ValidationError("mandate nonce already used");
+
+  const signature = approval.signature as Hex;
+  const signer = await recoverOr400({
+    domain: APPROVAL_DOMAIN(opts.chainId),
+    types: GUARDIAN_MANDATE_TYPES,
+    primaryType: "GuardianMandate",
+    message,
+    signature,
+  });
+  if (signer !== message.owner) throw new ValidationError("signature is not from the owner");
+  return { mandate, mandateHash, message, signature };
+}
+
+const SubmitRevokeSchema = z.object({
+  message: z.object({ owner: addr, account: addr, nonce: uintString, deadline: uintString }),
+  signature: signature65,
+});
+
+export type ValidatedRevoke = { message: { owner: Address; account: Address; nonce: bigint; deadline: bigint } };
+
+export async function validateRevoke(
+  body: unknown,
+  opts: { chainId: number; nowSec: bigint; isNonceUsed: (owner: Address, nonce: bigint) => boolean },
+): Promise<ValidatedRevoke> {
+  const parsed = SubmitRevokeSchema.safeParse(body);
+  if (!parsed.success) throw new ValidationError("malformed request", parsed.error.issues);
+  const m = parsed.data.message;
+  const message = {
+    owner: getAddress(m.owner),
+    account: getAddress(m.account),
+    nonce: BigInt(m.nonce),
+    deadline: BigInt(m.deadline),
+  };
+  if (message.deadline <= opts.nowSec) throw new ValidationError("revocation expired");
+  if (message.deadline > opts.nowSec + 3600n) throw new ValidationError("revocation deadline too far in the future");
+  if (opts.isNonceUsed(message.owner, message.nonce)) throw new ValidationError("revocation nonce already used");
+  const signer = await recoverOr400({
+    domain: APPROVAL_DOMAIN(opts.chainId),
+    types: GUARDIAN_REVOKE_TYPES,
+    primaryType: "GuardianRevoke",
+    message,
+    signature: parsed.data.signature as Hex,
+  });
+  if (signer !== message.owner) throw new ValidationError("revocation is not signed by the owner");
+  return { message };
 }

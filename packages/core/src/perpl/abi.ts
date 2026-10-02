@@ -29,6 +29,9 @@ const orderDescTuple =
 export const exchangeAbi = parseAbi([
   `function execOrder(${orderDescTuple} orderDesc) returns ((uint256 perpId, uint256 orderId) signature)`,
   "function depositCollateral(uint256 amountCNS)",
+  // Selector matches the operator allowlist (solc --hashes). The parameter ORDER (perpId, amountCNS) is
+  // inferred, not verified: the guardian keeps top-ups disabled until spike S2-bis proves it on testnet.
+  "function increasePositionCollateral(uint256 perpId, uint256 amountCNS)",
   "function getPosition(uint256 perpId, uint256 accountId) view returns ((uint256 accountId, uint256 nextNodeId, uint256 prevNodeId, uint8 positionType, uint256 depositCNS, uint256 pricePNS, uint256 lotLNS, uint256 entryBlock, int256 pnlCNS, int256 deltaPnlCNS, int256 premiumPnlCNS) positionInfo, uint256 markPricePNS, bool markPriceValid)",
   "function getExchangeInfo() view returns (uint256 balanceCNS, uint256 protocolBalanceCNS, uint256 recycleBalanceCNS, uint256 collateralDecimals, address collateralToken, address verifierProxy)",
   "function getAccountById(uint256 accountId) view returns ((uint256 accountId, uint256 balanceCNS, uint256 lockedBalanceCNS, uint8 frozen, address accountAddr, (uint256 bank1, uint256 bank2, uint256 bank3, uint256 bank4) positions) accountInfo)",
