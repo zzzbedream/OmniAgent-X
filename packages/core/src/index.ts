@@ -12,3 +12,8 @@ export * from "./perpl/marketData";
 export * from "./perpl/positions";
 export * from "./risk/metrics";
 export * from "./strategy/requestAuth";
+export * from "./guardian/mandate";
+export * from "./guardian/engine";
+export * from "./guardian/simulate";
+export * from "./guardian/compile";
+export * from "./guardian/describe";

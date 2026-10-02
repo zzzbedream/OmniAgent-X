@@ -186,6 +186,16 @@ export function buildCloseIocOrder(
   };
 }
 
+/**
+ * Lots for a partial close, rounded down so a reduction never exceeds the requested fraction.
+ * 0 means the fraction is below one lot; callers must not send it. A reduction is a close order
+ * (buildCloseIocOrder) with this smaller lot count.
+ */
+export function fractionOfLots(lotLNS: bigint, fraction: number): bigint {
+  if (!(fraction > 0 && fraction < 1)) throw new OrderBuildError(`fraction must be in (0, 1), got ${fraction}`);
+  return (lotLNS * BigInt(Math.round(fraction * 10_000))) / 10_000n;
+}
+
 /** Side implied by an on-chain order type we sent (verified OrderDescEnum), for open orders only. */
 export function sideOfOpenOrderType(orderType: number): "long" | "short" | undefined {
   if (orderType === OrderDescType.OpenLong) return "long";
