@@ -21,6 +21,11 @@ export function planRequestHash(request: string, budgetUsd: number): Hex {
   return keccak256(toBytes(JSON.stringify([request.trim(), budgetUsd])));
 }
 
+/** Request hash for /api/guardian/compile. The "guardian" tag keeps it apart from planning hashes. */
+export function guardianRequestHash(text: string): Hex {
+  return keccak256(toBytes(JSON.stringify(["guardian", text.trim()])));
+}
+
 const AuthSchema = z.object({
   owner: z.string().refine(isAddress, "invalid address"),
   account: z.string().refine(isAddress, "invalid address"),
@@ -30,10 +35,19 @@ const AuthSchema = z.object({
 
 export class RequestAuthError extends Error {}
 
-export async function verifyPlanRequest(
+export function verifyPlanRequest(
   auth: unknown,
   request: string,
   budgetUsd: number,
+  opts: { chainId: number; nowSec: bigint },
+): Promise<{ owner: Address; account: Address }> {
+  return verifySignedRequest(auth, planRequestHash(request, budgetUsd), opts);
+}
+
+/** Verifies a PlanRequest signature over an endpoint-specific request hash. */
+export async function verifySignedRequest(
+  auth: unknown,
+  requestHash: Hex,
   opts: { chainId: number; nowSec: bigint },
 ): Promise<{ owner: Address; account: Address }> {
   const parsed = AuthSchema.safeParse(auth);
@@ -49,7 +63,7 @@ export async function verifyPlanRequest(
       domain: APPROVAL_DOMAIN(opts.chainId),
       types: PLAN_REQUEST_TYPES,
       primaryType: "PlanRequest",
-      message: { owner, account, requestHash: planRequestHash(request, budgetUsd), deadline },
+      message: { owner, account, requestHash, deadline },
       signature: parsed.data.signature as Hex,
     });
   } catch {

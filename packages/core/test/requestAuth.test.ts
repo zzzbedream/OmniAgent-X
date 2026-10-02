@@ -1,7 +1,14 @@
 import { privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
 import { APPROVAL_DOMAIN } from "../src/strategy/approval";
-import { DailyQuota, PLAN_REQUEST_TYPES, planRequestHash, verifyPlanRequest } from "../src/strategy/requestAuth";
+import {
+  DailyQuota,
+  PLAN_REQUEST_TYPES,
+  guardianRequestHash,
+  planRequestHash,
+  verifyPlanRequest,
+  verifySignedRequest,
+} from "../src/strategy/requestAuth";
 
 const owner = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
 const account = "0x000000000000000000000000000000000000dEaD" as const;
@@ -44,5 +51,31 @@ describe("DailyQuota", () => {
     expect([q.take("a", 2), q.take("a", 2), q.take("a", 2), q.take("b", 2)]).toEqual([true, true, false, true]);
     day = "2026-09-27";
     expect(q.take("a", 2)).toBe(true);
+  });
+});
+
+describe("guardian compile requests", () => {
+  async function signHash(requestHash: `0x${string}`, deadline = NOW + 120n) {
+    const signature = await owner.signTypedData({
+      domain: APPROVAL_DOMAIN(10143),
+      types: PLAN_REQUEST_TYPES,
+      primaryType: "PlanRequest",
+      message: { owner: owner.address, account, requestHash, deadline },
+    });
+    return { owner: owner.address, account, deadline: deadline.toString(), signature };
+  }
+
+  it("hashes guardian text apart from planning requests", () => {
+    expect(guardianRequestHash("cierra si baja 5%")).not.toBe(planRequestHash("cierra si baja 5%", 0));
+  });
+
+  it("accepts the owner's signature over the guardian request hash", async () => {
+    const hash = guardianRequestHash("reduce la mitad si me acerco a la liquidación");
+    await expect(verifySignedRequest(await signHash(hash), hash, opts)).resolves.toEqual({ owner: owner.address, account });
+  });
+
+  it("does not accept a planning signature for a guardian request", async () => {
+    const planAuth = await auth("texto", 0);
+    await expect(verifySignedRequest(planAuth, guardianRequestHash("texto"), opts)).rejects.toThrow(/not signed by the owner/);
   });
 });
