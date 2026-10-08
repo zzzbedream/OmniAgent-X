@@ -9,6 +9,9 @@ import { Bars3Icon, BugAntIcon } from "@heroicons/react/24/outline";
 import { FaucetButton, RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick, useTargetNetwork } from "~~/hooks/scaffold-eth";
 
+// Mera is the account layer. The scaffold's wallet button and debug page are developer tools only.
+const SHOW_DEV_TOOLS = process.env.NEXT_PUBLIC_SHOW_WALLET_CONNECT === "true";
+
 type HeaderMenuLink = {
   label: string;
   href: string;
@@ -30,14 +33,22 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/intent",
   },
   {
+    label: "Guardián",
+    href: "/guardian",
+  },
+  {
     label: "Riesgo",
     href: "/dashboard",
   },
-  {
-    label: "Debug Contracts",
-    href: "/debug",
-    icon: <BugAntIcon className="h-4 w-4" />,
-  },
+  ...(SHOW_DEV_TOOLS
+    ? [
+        {
+          label: "Debug Contracts",
+          href: "/debug",
+          icon: <BugAntIcon className="h-4 w-4" />,
+        },
+      ]
+    : []),
 ];
 
 export const HeaderMenuLinks = () => {
@@ -108,8 +119,8 @@ export const Header = () => {
         </ul>
       </div>
       <div className="navbar-end grow mr-4">
-        <RainbowKitCustomConnectButton />
-        {isLocalNetwork && <FaucetButton />}
+        {SHOW_DEV_TOOLS && <RainbowKitCustomConnectButton />}
+        {SHOW_DEV_TOOLS && isLocalNetwork && <FaucetButton />}
       </div>
     </div>
   );

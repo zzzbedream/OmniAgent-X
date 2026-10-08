@@ -1,4 +1,5 @@
 // Client for packages/agent-worker.
+import type { GuardianMandate, SkipReason } from "@omniagent/core";
 import type { Address, Hex } from "viem";
 
 export const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:8787";
@@ -28,6 +29,28 @@ export const worker = {
   close: (body: unknown) => call<Record<string, unknown>>("/close", { method: "POST", body: JSON.stringify(body) }),
   decisions: (account: Address) =>
     call<{ entries: Record<string, unknown>[] }>(`/decisions?account=${encodeURIComponent(account)}`),
+  guardianStatus: (account: Address) => call<GuardianStatus>(`/guardian/status?account=${encodeURIComponent(account)}`),
+  /** Body: { mandate, approval: { message, signature } } — a GuardianMandate signed by the owner. */
+  activateGuardian: (body: unknown) =>
+    call<{ active: true; mandateHash: Hex; expiresAt: string; lines: string[] }>("/guardian/mandates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Body: { message, signature } — a GuardianRevoke signed by the owner. */
+  revokeGuardian: (body: unknown) =>
+    call<{ active: false }>("/guardian/revoke", { method: "POST", body: JSON.stringify(body) }),
+};
+
+export type GuardianStatus = {
+  active: boolean;
+  mode: "dry-run" | "live";
+  guardian: { intervalMs: number; addCollateralEnabled: boolean };
+  mandate?: GuardianMandate;
+  mandateHash?: Hex;
+  lines?: string[];
+  expiresAt?: number;
+  state?: { actionsToday: number; collateralAddedUsd: number; lastActionAtSec: Record<string, number> };
+  lastTick?: { at: number; skipped: { market: string; reason: SkipReason }[]; error?: string };
 };
 
 const ACCOUNT_KEY = (owner: Address) => `omniagent.delegatedAccount.${owner.toLowerCase()}`;
