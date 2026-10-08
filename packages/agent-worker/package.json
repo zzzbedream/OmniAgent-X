@@ -9,7 +9,8 @@
     "test": "vitest run",
     "check-types": "tsc --noEmit",
     "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/main.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
-    "start:prod": "node dist/main.mjs"
+    "start:prod": "node dist/main.mjs",
+    "register-8004": "tsx scripts/register-8004.ts"
   },
   "dependencies": {
     "@omniagent/core": "workspace:*",

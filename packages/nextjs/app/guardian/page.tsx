@@ -7,26 +7,32 @@ import Link from "next/link";
 import {
   APPROVAL_DOMAIN,
   type CompiledMandate,
+  ERC8004_TESTNET,
   GUARDIAN_MANDATE_TYPES,
   GUARDIAN_REVOKE_TYPES,
   PERPL_TESTNET,
   PLAN_REQUEST_TYPES,
+  guardianFeedback,
   guardianRequestHash,
   marginFractionFromRaw,
+  reputationRegistryAbi,
 } from "@omniagent/core";
 import type { NextPage } from "next";
 import type { Address } from "viem";
-import { type DecisionEntry, GuardianFeed } from "~~/app/guardian/_components/GuardianFeed";
+import { type DecisionEntry, type GuardianActionType, GuardianFeed } from "~~/app/guardian/_components/GuardianFeed";
 import { GuardianStatusCard } from "~~/app/guardian/_components/GuardianStatusCard";
 import { MandatePreview } from "~~/app/guardian/_components/MandatePreview";
 import { ShockSimulator } from "~~/app/guardian/_components/ShockSimulator";
-import { type GuardianStatus, loadDelegatedAccount, worker } from "~~/lib/omni/worker";
+import { type GuardianStatus, WORKER_URL, loadDelegatedAccount, worker } from "~~/lib/omni/worker";
 import { useMera } from "~~/services/mera/MeraProvider";
 
 const EXAMPLE =
   "Si mi distancia a liquidación baja de 15%, agrega 20 USD de colateral. Si baja de 8%, reduce la mitad. Si baja de 4%, cierra todo.";
 const TTL_OPTIONS = [1, 7, 30] as const;
 const POLL_MS = 10_000;
+const AGENT_ID = /^\d+$/.test(process.env.NEXT_PUBLIC_GUARDIAN_AGENT_ID ?? "")
+  ? BigInt(process.env.NEXT_PUBLIC_GUARDIAN_AGENT_ID as string)
+  : undefined;
 
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 const toWire = (m: Record<string, unknown>) =>
@@ -153,6 +159,17 @@ const Guardian: NextPage = () => {
       await refresh();
     });
 
+  // ERC-8004 feedback from the owner's Mera account (not the agent owner, as the standard requires).
+  const rate = async (args: { txHash: `0x${string}`; action: GuardianActionType; helpful: boolean }) => {
+    if (!walletClient || AGENT_ID === undefined) throw new Error("feedback not configured");
+    await walletClient.writeContract({
+      address: ERC8004_TESTNET.reputationRegistry,
+      abi: reputationRegistryAbi,
+      functionName: "giveFeedback",
+      args: guardianFeedback({ agentId: AGENT_ID, workerUrl: WORKER_URL, ...args }),
+    });
+  };
+
   const canSign = !!account && !!walletClient && !!delegated && !busy;
   const blocked = !!compiled && compiled.violations.length > 0;
 
@@ -230,7 +247,7 @@ const Guardian: NextPage = () => {
 
       <section className="flex flex-col gap-2 pb-10">
         <h2 className="font-semibold">Historial del guardián</h2>
-        <GuardianFeed entries={feed} />
+        <GuardianFeed entries={feed} onRate={AGENT_ID !== undefined && walletClient ? rate : undefined} />
       </section>
     </div>
   );
