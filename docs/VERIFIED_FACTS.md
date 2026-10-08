@@ -143,3 +143,36 @@ Context: an unsolicited DM invited us to launch a token on `testnet.vibevibe.fun
 3. The hackathon rules allow a token launch.
 
 Any experiment uses a fresh burner wallet. Wallet approvals on testnet are still real signatures.
+
+## Verified 2026-10-01 to 2026-10-07 (from this machine, which reaches the real networks)
+- **Monad testnet RPC** `https://testnet-rpc.monad.xyz` answers: `cast chain-id` = 10143.
+- **Perpl testnet collateral is Agora's AUSD.**
+  - `Exchange.getExchangeInfo()` returns `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC`, `symbol()` "AUSD", 6 decimals.
+  - This settles the api-docs vs fork-test contradiction above; the code still reads it on-chain.
+- **Perpl testnet minimums** (`GET https://testnet.perpl.xyz/api/v1/pub/context`):
+  - `min_account_open_amount` 100000000 = **100 AUSD** to open an account.
+  - `min_deposit_amount` 10000000 = 10 AUSD for later deposits.
+- **BTC testnet margins** in the same context: `initial_margin` 1500, `maintenance_margin` 2500. With `fraction = 100 / raw` that is 6.67% and 4%.
+- **Perpl has native trigger orders** (`PerplFoundation/api-docs` types.md and websocket.md):
+  - A single trigger price with a GTE/LTE condition on last or mark price, optionally linked to a position (`lp`).
+  - The guardian differs by acting on liquidation distance, drawdown and leverage, with graduated responses.
+- **Agora AUSD faucet** `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` (docs.agora.finance contract deployments):
+  - Has code and holds about 999M AUSD.
+  - `eth_call requestFunds(address)` does not revert, but that selector is not among the PUSH4 values in its bytecode. **UNVERIFIED** whether a transaction sends funds.
+- **`Exchange.increasePositionCollateral(uint256,uint256)`** has selector `0xf769f0d3`, the one in the current operator allowlist.
+  - The parameter order (perpId, amountCNS) is **UNVERIFIED**, so guardian top-ups stay off (`GUARDIAN_ADD_COLLATERAL=false`) until spike S2-bis.
+- **ERC-8004 on Monad testnet** (repo `erc-8004/erc-8004-contracts`, testnet address set):
+  - Identity Registry `0x8004A818BFB912233c491871b3d84c89A494BD9e` (`name()` "AgentIdentity").
+  - Reputation Registry `0x8004B663056A597Dffe9eCcC1965A193B7388713`.
+  - Both are proxies. The implementations contain `register(string)` `0xf2c298be`, `setAgentURI` `0x0af28bd3` and `giveFeedback(uint256,int128,uint8,string,string,string,string,bytes32)` `0x3c036a7e`.
+  - The mainnet addresses in docs.monad.xyz (`0x8004A169…`, `0x8004BAa1…`) have **no code on testnet**.
+  - `register` simulated against testnet returns a fresh agentId.
+  - Per the spec, the feedback submitter must not be the agent owner or an approved operator.
+- **DeepSeek API** (api-docs.deepseek.com, Oct 2026):
+  - Base URL `https://api.deepseek.com`, OpenAI-compatible `/chat/completions`.
+  - Models `deepseek-flash` (V4.1) and `deepseek-v4-pro`, both with JSON Output and tool calls.
+  - JSON mode needs the word "json" and an example in the prompt, and "may occasionally return empty content". `chatJson` retries once.
+  - Flash costs US$0.15–0.30 per M input tokens (cache miss) and US$0.60–1.20 per M output; off-peak is half.
+- **Windows dev machine:**
+  - `envio@3.12.1` ships Linux and macOS binaries only, so indexer codegen and tests need Linux.
+  - Under memory pressure, `tsc`/vitest/lint can fail with `VirtualAlloc failed`. That is an environment failure, not a code failure.

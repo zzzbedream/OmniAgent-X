@@ -26,6 +26,7 @@ import {
   encodeFunctionData,
 } from "viem";
 import type { ExecutionOutcome } from "./guardian";
+import { safeErrorMessage } from "./log";
 import { MARKET_BY_PERP, ValidationError, type ValidatedClose, type ValidatedPlan } from "./validate";
 
 export type ExecutionResult = {
@@ -40,6 +41,7 @@ export async function checkAccountAccess(client: PublicClient, owner: Address, a
   if (acc.owner !== owner) throw new ValidationError("approval owner is not the DelegatedAccount owner");
   if (!acc.isOperator) throw new ValidationError("this worker is not an operator of the account");
   if (acc.accountId === 0n) throw new ValidationError("DelegatedAccount has no exchange account yet (createAccount)");
+  if (!acc.ownsExchangeAccount) throw new ValidationError("the exchange account does not belong to this DelegatedAccount");
   // Accounts minted by the testnet factory start with a stale allowlist (see core/perpl/allowlist.ts).
   const canExec = await client.readContract({
     address: account,
@@ -92,7 +94,7 @@ export async function executePlan(args: {
       const txHash = await sendExecOrder(client, wallet, plan.message.account, b.order);
       results.push({ ...b, txHash });
     } catch (e) {
-      results.push({ ...b, error: (e as Error).message.slice(0, 500) });
+      results.push({ ...b, error: safeErrorMessage(e, 500) });
       // Stop on the first failure: later orders were sized assuming the earlier ones succeed.
       break;
     }
@@ -105,10 +107,13 @@ export async function executePlan(args: {
 type OperatorWallet = WalletClient<Transport, Chain, Account>;
 
 async function confirmed(client: PublicClient, txHash: Hex): Promise<Hex> {
-  const receipt = await client.waitForTransactionReceipt({ hash: txHash });
+  // Bounded so a stuck transaction cannot hold the account lock (and block a revoke) indefinitely.
+  const receipt = await client.waitForTransactionReceipt({ hash: txHash, timeout: RECEIPT_TIMEOUT_MS });
   if (receipt.status !== "success") throw new Error(`reverted in tx ${txHash}`);
   return txHash;
 }
+
+const RECEIPT_TIMEOUT_MS = 30_000;
 
 // Both senders target the DelegatedAccount, not the Exchange: its fallback forwards allow-listed selectors.
 async function sendExecOrder(client: PublicClient, wallet: OperatorWallet, account: Address, order: OrderDesc) {
@@ -213,7 +218,7 @@ export async function executeClose(args: {
     const txHash = await sendExecOrder(client, wallet, account, order);
     return { mode: "live", status: "sent", side, sideSource, order, calldata, txHash };
   } catch (e) {
-    return { mode: "live", status: "failed", side, sideSource, order, calldata, error: (e as Error).message.slice(0, 500) };
+    return { mode: "live", status: "failed", side, sideSource, order, calldata, error: safeErrorMessage(e, 500) };
   }
 }
 
@@ -250,6 +255,6 @@ export async function executeGuardianAction(args: {
     if (!live) return { status: "built" };
     return { status: "sent", txHash: await sendExecOrder(client, wallet, account, order) };
   } catch (e) {
-    return { status: "failed", error: (e as Error).message.slice(0, 500) };
+    return { status: "failed", error: safeErrorMessage(e, 500) };
   }
 }

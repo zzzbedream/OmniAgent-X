@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DecisionLog } from "../src/log";
+import { DecisionLog, safeErrorMessage } from "../src/log";
 
 const entry = (nonce: string, status: "rejected" | "built") => ({
   ts: "t",
@@ -37,5 +37,14 @@ describe("DecisionLog.reserve", () => {
     expect(log.reserve(e)).toBe(false);
     // simulated crash: the final result was never appended, the pending claim still blocks replay
     expect(new DecisionLog(dir).isNonceUsed("0xabc0000000000000000000000000000000000001", 9n)).toBe(true);
+  });
+});
+
+describe("safeErrorMessage", () => {
+  it("removes URLs, which can carry an RPC API key", () => {
+    const e = new Error('HTTP request failed. URL: https://monad-testnet.g.alchemy.com/v2/SECRETKEY Details: "boom"');
+    const msg = safeErrorMessage(e);
+    expect(msg).not.toContain("SECRETKEY");
+    expect(msg).toContain("<url>");
   });
 });

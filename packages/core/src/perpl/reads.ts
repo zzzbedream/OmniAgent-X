@@ -55,6 +55,12 @@ export async function readDelegatedAccount(client: PublicClient, account: Addres
     accountId,
     collateralToken,
     isOperator,
+    /**
+     * The exchange's record for accountId names this contract as its account. Without this, any contract
+     * that answers owner()/accountId() could borrow someone else's exchange account (security review H1).
+     */
+    ownsExchangeAccount:
+      exchangeAccount !== undefined && exchangeAccount.accountAddr.toLowerCase() === account.toLowerCase(),
     balanceCNS: exchangeAccount?.balanceCNS ?? 0n,
     lockedBalanceCNS: exchangeAccount?.lockedBalanceCNS ?? 0n,
   };

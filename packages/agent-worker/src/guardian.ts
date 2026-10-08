@@ -15,7 +15,7 @@ import {
   evaluateGuardian,
 } from "@omniagent/core";
 import type { Address, Hex } from "viem";
-import { type DecisionLog, jsonReplacer } from "./log";
+import { type DecisionLog, jsonReplacer, safeErrorMessage } from "./log";
 
 export type MandateRecord = {
   owner: Address;
@@ -25,6 +25,8 @@ export type MandateRecord = {
   nonce: string;
   expiresAt: number;
   activatedAt: number;
+  /** Execution mode the owner signed under; a dry-run mandate must be re-activated to run live. */
+  mode?: "dry-run" | "live";
   state: GuardianState;
   /** UTC day (YYYY-MM-DD) that state.actionsToday counts. */
   stateDay: string;
@@ -163,6 +165,11 @@ export type TickStatus = { at: number; actions: GuardianAction[]; skipped: Guard
 
 /** After a failed transaction, wait before trying that market again (also covers closes, which skip the cooldown). */
 export const FAILURE_BACKOFF_SEC = 60;
+/**
+ * After a sent close, wait before closing that market again. An IOC close can land without filling, and closes
+ * skip the cooldown, so without this a stuck position would get a close every tick (security review H2).
+ */
+export const CLOSE_RETRY_SEC = 60;
 
 export class GuardianLoop {
   private readonly lastTick = new Map<string, TickStatus>();
@@ -213,7 +220,7 @@ export class GuardianLoop {
             at: now,
             actions: prev?.actions ?? [],
             skipped: prev?.skipped ?? [],
-            error: (e as Error).message.slice(0, 300),
+            error: safeErrorMessage(e),
           });
         }
       }
@@ -228,6 +235,15 @@ export class GuardianLoop {
 
   private async guard(rec: MandateRecord, now: number) {
     const key = rec.account.toLowerCase();
+    if (rec.mode !== undefined && rec.mode !== this.deps.mode) {
+      this.lastTick.set(key, {
+        at: now,
+        actions: [],
+        skipped: [],
+        error: `mandate was signed in ${rec.mode} mode; re-activate it to run in ${this.deps.mode} mode`,
+      });
+      return;
+    }
     const mandate = this.effectiveMandate(rec.mandate);
     if (mandate.rules.length === 0) {
       this.lastTick.set(key, { at: now, actions: [], skipped: [], error: "every rule needs collateral top-ups, which are disabled" });
@@ -237,7 +253,7 @@ export class GuardianLoop {
     try {
       positions = await this.deps.readPositions(rec);
     } catch (e) {
-      this.lastTick.set(key, { at: now, actions: [], skipped: [], error: (e as Error).message.slice(0, 300) });
+      this.lastTick.set(key, { at: now, actions: [], skipped: [], error: safeErrorMessage(e) });
       return;
     }
     const ready = positions.filter(p => (this.backoffUntil.get(`${key}:${p.market}`) ?? 0) <= now);
@@ -254,11 +270,14 @@ export class GuardianLoop {
       try {
         outcome = await this.deps.execute(rec, action, position);
       } catch (e) {
-        outcome = { status: "failed", error: (e as Error).message.slice(0, 500) };
+        outcome = { status: "failed", error: safeErrorMessage(e, 500) };
       }
       this.logAction(rec, action, outcome, now);
       if (outcome.status === "failed") this.backoffUntil.set(`${key}:${action.market}`, now + FAILURE_BACKOFF_SEC);
-      else this.record(key, action, now);
+      else {
+        this.record(key, action, now);
+        if (action.type === "close") this.backoffUntil.set(`${key}:${action.market}`, now + CLOSE_RETRY_SEC);
+      }
     }
   }
 

@@ -61,6 +61,7 @@ export function makePositionReader(deps: {
   return async rec => {
     const acc = await readDelegatedAccount(deps.client, rec.account);
     if (acc.accountId === 0n) return [];
+    if (!acc.ownsExchangeAccount) throw new Error("the exchange account does not belong to this DelegatedAccount");
     const [onChain, decimals, maintenance] = await Promise.all([
       readPositions(deps.client, acc.accountId),
       collateralDecimals(),

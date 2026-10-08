@@ -13,7 +13,7 @@ import type { WorkerConfig } from "./config";
 import { checkAccountAccess, checkAccountOnChain, executeClose, executeGuardianAction, executePlan } from "./executor";
 import { GuardianLoop, GuardianStore } from "./guardian";
 import { makePositionReader } from "./guardianChain";
-import { DecisionLog, jsonReplacer } from "./log";
+import { DecisionLog, jsonReplacer, safeErrorMessage } from "./log";
 import { KeyedMutex, RateLimiter } from "./rateLimit";
 import {
   ValidationError,
@@ -25,6 +25,8 @@ import {
 } from "./validate";
 
 const MAX_BODY_BYTES = 64 * 1024;
+/** Bounds the guardian's per-tick work (security review M5). */
+const MAX_ACTIVE_MANDATES = 200;
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   let size = 0;
@@ -221,12 +223,24 @@ export function createWorker(cfg: WorkerConfig) {
         try {
           await checkAccountAccess(client, owner, account, operator.address);
         } catch (e) {
-          log.append({ ...base, status: "rejected", detail: (e as Error).message });
+          log.append({ ...base, status: "rejected", detail: safeErrorMessage(e) });
           throw e;
         }
         const now = Number(nowSec());
+        if (!guardianStore.get(account) && guardianStore.active(now).length >= MAX_ACTIVE_MANDATES) {
+          throw new ValidationError("the guardian is at capacity; try again later");
+        }
         guardianStore.activate(
-          { owner, account, mandate: v.mandate, mandateHash: v.mandateHash, nonce: base.nonce, expiresAt: Number(expiresAt), activatedAt: now },
+          {
+            owner,
+            account,
+            mandate: v.mandate,
+            mandateHash: v.mandateHash,
+            nonce: base.nonce,
+            expiresAt: Number(expiresAt),
+            activatedAt: now,
+            mode,
+          },
           now,
         );
         const lines = describeMandate(v.mandate);
@@ -306,7 +320,7 @@ export function createWorker(cfg: WorkerConfig) {
       if (e instanceof RateLimited) return send(res, 429, { error: "rate limited" });
       if (e instanceof ValidationError) return send(res, 400, { error: e.message, details: e.details });
       console.error(e);
-      send(res, 500, { error: "internal error", message: (e as Error).message.slice(0, 300) });
+      send(res, 500, { error: "internal error", message: safeErrorMessage(e) });
     }
   });
   guardianLoop.start(cfg.guardianIntervalMs);

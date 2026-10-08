@@ -4,10 +4,14 @@
 // Every write is signed by the passkey-derived owner key; the operator can never withdraw.
 import { useCallback, useEffect, useState } from "react";
 import {
+  AGORA_AUSD_FAUCET_TESTNET,
   APPROVAL_DOMAIN,
   type AllowlistChange,
   CONSENT_REQUEST_TYPES,
   PERPL_TESTNET,
+  PERPL_TESTNET_MIN_DEPOSIT_AUSD,
+  PERPL_TESTNET_MIN_OPEN_AUSD,
+  ausdFaucetAbi,
   delegatedAccountAbi,
   delegatedAccountFactoryAbi,
   erc20Abi,
@@ -39,7 +43,7 @@ const Onboard: NextPage = () => {
   const [userName, setUserName] = useState("");
   const [status, setStatus] = useState<Status>();
   const [delegated, setDelegated] = useState<Address>();
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState(String(PERPL_TESTNET_MIN_OPEN_AUSD));
   const [log, setLog] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
 
@@ -205,6 +209,19 @@ const Onboard: NextPage = () => {
     }
   };
 
+  // Testnet only: Agora's faucet sends AUSD to the passkey address (the balance below shows whether it arrived).
+  const requestAusd = async () => {
+    if (!walletClient || !account) return;
+    await tx("pedir AUSD de prueba", () =>
+      walletClient.writeContract({
+        address: AGORA_AUSD_FAUCET_TESTNET,
+        abi: ausdFaucetAbi,
+        functionName: "requestFunds",
+        args: [account.address],
+      }),
+    );
+  };
+
   const withdraw = async () => {
     if (!walletClient || !status?.account) return;
     const acc = status.account;
@@ -327,8 +344,9 @@ const Onboard: NextPage = () => {
         <section className="card bg-base-100 shadow p-4 gap-3">
           <h2 className="font-semibold">3 · Depositar / retirar</h2>
           <p className="text-xs opacity-70">
-            Colateral: {status.collateral.symbol} ({status.collateral.token}), leído on-chain del Exchange. En testnet
-            no es AUSD real. Mínimo de apertura documentado: 10.
+            Colateral: {status.collateral.symbol} ({status.collateral.token}), leído on-chain del Exchange. Abrir la
+            cuenta pide al menos {PERPL_TESTNET_MIN_OPEN_AUSD} AUSD; los depósitos siguientes, al menos{" "}
+            {PERPL_TESTNET_MIN_DEPOSIT_AUSD}.
           </p>
           <input
             className="input input-bordered w-full"
@@ -337,6 +355,9 @@ const Onboard: NextPage = () => {
             onChange={e => setAmount(e.target.value)}
             aria-label="Monto"
           />
+          <button className="btn btn-outline btn-sm self-start" disabled={pending} onClick={requestAusd}>
+            Pedir AUSD de prueba (faucet de Agora)
+          </button>
           <div className="flex gap-2">
             <button className="btn btn-primary" disabled={pending} onClick={deposit}>
               {status.account.accountId === 0n ? "Depositar y abrir cuenta" : "Depositar"}

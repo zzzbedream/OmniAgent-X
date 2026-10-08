@@ -20,6 +20,15 @@ export type DecisionEntry = {
 
 export const jsonReplacer = (_k: string, v: unknown) => (typeof v === "bigint" ? v.toString() : v);
 
+/**
+ * Error text that is safe to log and serve: URLs are removed (viem errors embed the RPC URL, which can
+ * carry a provider API key) and the length is bounded.
+ */
+export function safeErrorMessage(e: unknown, max = 300): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  return raw.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, "<url>").slice(0, max);
+}
+
 export class DecisionLog {
   private readonly file: string;
   private readonly usedNonces = new Set<string>();

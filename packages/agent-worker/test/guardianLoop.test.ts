@@ -190,6 +190,29 @@ describe("GuardianLoop.tick", () => {
     expect(executed).toEqual(["close", "close"]);
   });
 
+  it("does not resend a close every tick when the position is still open", async () => {
+    const { loop, executed, advance, setDeposit } = setup({ execStatus: "sent" });
+    setDeposit(60);
+    await loop.tick();
+    advance(5);
+    await loop.tick();
+    expect(executed).toEqual(["close"]);
+    advance(120);
+    await loop.tick();
+    expect(executed).toEqual(["close", "close"]);
+  });
+
+  it("requires re-activation when the worker mode differs from the signed mode", async () => {
+    const { store, loop, executed } = setup();
+    store.activate(
+      { owner, account, mandate, mandateHash: hashMandate(mandate), nonce: "2", expiresAt: T0 + DAY, activatedAt: T0, mode: "live" },
+      T0,
+    );
+    await loop.tick();
+    expect(executed).toEqual([]);
+    expect(loop.status(account)?.error).toMatch(/re-activate/);
+  });
+
   it("keeps going when reading one account fails", async () => {
     const { store, log } = setup();
     const loop = new GuardianLoop({

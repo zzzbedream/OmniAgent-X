@@ -1,9 +1,9 @@
 // Perpl on Monad testnet. Sources: PerplFoundation/delegated-account README (Factory, Exchange)
 // and PerplFoundation/api-docs README (market ids). See docs/VERIFIED_FACTS.md.
 //
-// The collateral token is deliberately NOT hard-coded: api-docs lists 0xdf5b…c027 ("USD") while the
-// delegated-account fork test uses 0xa9012a…22dC ("AUSD, 6 decimals"). Read it on-chain with
-// Exchange.getExchangeInfo() (see readCollateral in ./reads.ts).
+// The collateral token is deliberately NOT hard-coded; read it on-chain with Exchange.getExchangeInfo()
+// (readCollateral in ./reads.ts). On 2026-10-01 that returned Agora's AUSD 0xa9012a…22dC (6 decimals),
+// which settled the api-docs (0xdf5b…c027 "USD") vs fork-test disagreement in favour of AUSD.
 import type { Address } from "viem";
 
 export const PERPL_TESTNET = {
@@ -30,3 +30,23 @@ export const ASSIGN_OPERATOR_TYPES = {
     { name: "deadline", type: "uint256" },
   ],
 } as const;
+
+/**
+ * Agora's AUSD faucet on Monad testnet (docs.agora.finance contract deployments). Another hackathon project
+ * reports 10,000 AUSD per request. requestFunds(recipient) is not in the bytecode's selector list, but an
+ * eth_call of it does not revert (2026-10-01): treat the call as UNVERIFIED and check the balance after it.
+ */
+export const AGORA_AUSD_FAUCET_TESTNET = "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C" as Address;
+export const ausdFaucetAbi = [
+  {
+    type: "function",
+    name: "requestFunds",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "recipient", type: "address" }],
+    outputs: [],
+  },
+] as const;
+
+/** Perpl testnet minimums from /v1/pub/context (2026-10-01), in AUSD: opening an account, later deposits. */
+export const PERPL_TESTNET_MIN_OPEN_AUSD = 100;
+export const PERPL_TESTNET_MIN_DEPOSIT_AUSD = 10;
