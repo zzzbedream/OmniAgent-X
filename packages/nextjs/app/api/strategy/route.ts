@@ -19,14 +19,12 @@ import {
   RequestAuthError,
   hashPlanOrders,
   llmRolesFromEnv,
-  readDelegatedAccount,
   readPerpSnapshot,
   runPlanningPipeline,
   verifyPlanRequest,
 } from "@omniagent/core";
-import { createPublicClient, getAddress, http, isAddress } from "viem";
-import { monadTestnet } from "viem/chains";
 import { z } from "zod";
+import { assertEligibleAccount, serverClient as client, envInt } from "~~/lib/omni/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,12 +36,6 @@ const BodySchema = z.object({
 });
 
 const quota = new DailyQuota();
-const expectedOperator =
-  process.env.WORKER_OPERATOR_ADDRESS && isAddress(process.env.WORKER_OPERATOR_ADDRESS)
-    ? getAddress(process.env.WORKER_OPERATOR_ADDRESS)
-    : undefined;
-
-const client = createPublicClient({ chain: monadTestnet, transport: http(process.env.MONAD_TESTNET_RPC || undefined) });
 
 async function readQuotes(): Promise<MarketQuote[]> {
   return Promise.all(
@@ -79,10 +71,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const acc = await readDelegatedAccount(client, caller.account, expectedOperator);
-    if (acc.owner !== caller.owner) throw new Error("signer does not own this DelegatedAccount");
-    if (acc.accountId === 0n) throw new Error("DelegatedAccount has no exchange account (deposit first)");
-    if (expectedOperator && !acc.isOperator) throw new Error("this app's agent is not an operator of the account");
+    await assertEligibleAccount(caller);
   } catch (e) {
     return NextResponse.json({ error: "account not eligible", message: (e as Error).message }, { status: 403 });
   }
@@ -98,10 +87,10 @@ export async function POST(req: Request) {
   }
 
   // Charged only once market data is in hand, right before the two paid LLM calls.
-  if (!quota.take(`owner:${caller.owner}`, Number(process.env.LLM_MAX_PLANS_PER_OWNER_PER_DAY ?? 10))) {
+  if (!quota.take(`owner:${caller.owner}`, envInt("LLM_MAX_PLANS_PER_OWNER_PER_DAY", 10))) {
     return NextResponse.json({ error: "daily planning quota for this account exhausted" }, { status: 429 });
   }
-  if (!quota.take("global", Number(process.env.LLM_MAX_PLANS_PER_DAY ?? 50))) {
+  if (!quota.take("global", envInt("LLM_MAX_PLANS_PER_DAY", 50))) {
     return NextResponse.json({ error: "daily planning quota exhausted" }, { status: 429 });
   }
 
