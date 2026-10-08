@@ -100,7 +100,61 @@ describe("GuardianStore", () => {
   });
 });
 
+describe("GuardianStore sides", () => {
+  it("remembers a resolved side across restarts and forgets it on request", () => {
+    const { dir, store } = setup();
+    store.rememberSide(account, "BTC", "short");
+    expect(new GuardianStore(dir).sideFor(account, "BTC")).toBe("short");
+    store.forgetSide(account, "BTC");
+    expect(store.sideFor(account, "BTC")).toBeUndefined();
+  });
+});
+
 describe("GuardianLoop.tick", () => {
+  it("skips an account whose mandate was revoked after the tick started", async () => {
+    const { store, log } = setup();
+    const executed: string[] = [];
+    const loop = new GuardianLoop({
+      store,
+      log,
+      mode: "dry-run",
+      addCollateralEnabled: true,
+      readPositions: async () => [position(60)],
+      execute: async (_r, a) => {
+        executed.push(a.type);
+        return { status: "built" };
+      },
+      withLock: async (_k, fn) => {
+        store.revoke(account); // the owner's revoke wins the lock first
+        return fn();
+      },
+      now: () => T0,
+    });
+    await loop.tick();
+    expect(executed).toEqual([]);
+  });
+
+  it("records the error and keeps the process alive when saving state fails", async () => {
+    const { store, loop } = setup({ execStatus: "sent" });
+    store.recordAction = () => {
+      throw new Error("EPERM rename");
+    };
+    await expect(loop.tick()).resolves.toBeUndefined();
+    expect(loop.status(account)?.error).toMatch(/EPERM/);
+  });
+
+  it("logs a dry-run close once per cooldown, not on every tick", async () => {
+    const { loop, executed, advance, setDeposit } = setup();
+    setDeposit(60);
+    await loop.tick();
+    advance(5);
+    await loop.tick();
+    expect(executed).toEqual(["close"]);
+    advance(400);
+    await loop.tick();
+    expect(executed).toEqual(["close", "close"]);
+  });
+
   it("executes the engine's action, logs it with an explanation and starts the cooldown", async () => {
     const { loop, executed, log, store } = setup();
     await loop.tick();
@@ -108,7 +162,8 @@ describe("GuardianLoop.tick", () => {
     const [entry] = log.recent(account);
     expect(entry).toMatchObject({ kind: "guardian", mode: "dry-run", status: "built", planHash: hashMandate(mandate) });
     expect((entry!.detail as { explanation: string }).explanation).toMatch(/^BTC: reduciría la posición 50%/);
-    expect(store.stateFor(account, T0).lastActionAtSec.BTC).toBe(T0);
+    // Dry-run cooldowns live in memory only, so switching to live starts from a clean state.
+    expect(store.stateFor(account, T0).lastActionAtSec.BTC).toBeUndefined();
 
     await loop.tick(); // still in cooldown: no second action
     expect(executed).toEqual(["reduce"]);

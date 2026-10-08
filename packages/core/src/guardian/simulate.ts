@@ -1,8 +1,9 @@
 // "What would the guardian do?" Replays a price path against one position with the same engine the
 // worker runs. Used for the shock simulation in the PWA: no transaction, no network.
 //
-// Approximations (labelled as such in the UI): a reduction releases collateral pro rata and realizes
-// nothing; funding and fees are ignored, as in risk/metrics.ts.
+// Approximations (labelled as such in the UI): a reduction keeps the position's collateral on the smaller
+// position and realizes nothing (how Perpl reassigns margin on a partial close is UNVERIFIED); funding
+// and fees are ignored, as in risk/metrics.ts.
 import type { MarketSymbol } from "../perpl/network";
 import { type PositionInput, positionMetrics } from "../risk/metrics";
 import { EMPTY_GUARDIAN_STATE, type GuardianAction, type GuardianSkip, type GuardianState, evaluateGuardian } from "./engine";
@@ -27,8 +28,7 @@ function applyAction(p: PositionInput, a: GuardianAction): PositionInput {
   if (a.type === "addCollateral") {
     return { ...p, depositCNS: p.depositCNS + BigInt(Math.round(a.usd * 10 ** p.collateralDecimals)) };
   }
-  const remaining = p.lotLNS - a.lotLNS;
-  return { ...p, lotLNS: remaining, depositCNS: p.lotLNS > 0n ? (p.depositCNS * remaining) / p.lotLNS : 0n };
+  return { ...p, lotLNS: p.lotLNS - a.lotLNS };
 }
 
 function nextState(s: GuardianState, a: GuardianAction, market: MarketSymbol, t: number): GuardianState {
@@ -52,6 +52,7 @@ export function simulateShock(args: {
   state?: GuardianState;
 }): SimStep[] {
   const stepSec = args.stepSec ?? 60;
+  if (args.path.some(m => !(m > -1) || !Number.isFinite(m))) throw new Error("every move must be a finite number above -1");
   const startMark = args.position.markPricePNS;
   let position = args.position;
   let state = args.state ?? EMPTY_GUARDIAN_STATE;

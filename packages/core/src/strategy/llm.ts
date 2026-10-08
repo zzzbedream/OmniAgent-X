@@ -43,7 +43,9 @@ export function llmRolesFromEnv(
   const baseUrl = env.LLM_BASE_URL;
   const apiKey = env.LLM_API_KEY;
   const model = env.LLM_MODEL;
-  const maxTokens = env.LLM_MAX_TOKENS === undefined ? undefined : Number(env.LLM_MAX_TOKENS);
+  // A blank value (as copied from .env.example) means "use the default", not 0.
+  const rawMaxTokens = env.LLM_MAX_TOKENS?.trim();
+  const maxTokens = rawMaxTokens ? Number(rawMaxTokens) : undefined;
   const missing = [
     !baseUrl && "LLM_BASE_URL",
     !apiKey && "LLM_API_KEY",

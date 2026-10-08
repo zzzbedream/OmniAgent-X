@@ -23,6 +23,8 @@ export const jsonReplacer = (_k: string, v: unknown) => (typeof v === "bigint" ?
 export class DecisionLog {
   private readonly file: string;
   private readonly usedNonces = new Set<string>();
+  /** Parsed copy of the file, so readers (the guardian, every tick) never re-read it from disk. */
+  private entries: DecisionEntry[] = [];
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
@@ -31,6 +33,7 @@ export class DecisionLog {
       for (const line of readFileSync(this.file, "utf8").split("\n")) {
         if (!line.trim()) continue;
         const e = JSON.parse(line) as DecisionEntry;
+        this.entries.push(e);
         if (e.status !== "rejected") this.usedNonces.add(DecisionLog.key(e.owner, e.nonce));
       }
     }
@@ -53,13 +56,18 @@ export class DecisionLog {
     const key = DecisionLog.key(entry.owner, entry.nonce);
     if (this.usedNonces.has(key)) return false;
     this.usedNonces.add(key);
-    appendFileSync(this.file, JSON.stringify({ ...entry, status: "pending" }, jsonReplacer) + "\n");
+    const pending = { ...entry, status: "pending" as const };
+    appendFileSync(this.file, JSON.stringify(pending, jsonReplacer) + "\n");
+    this.entries.push(JSON.parse(JSON.stringify(pending, jsonReplacer)) as DecisionEntry);
     return true;
   }
 
   append(entry: DecisionEntry) {
     if (entry.status !== "rejected") this.usedNonces.add(DecisionLog.key(entry.owner, entry.nonce));
-    appendFileSync(this.file, JSON.stringify(entry, jsonReplacer) + "\n");
+    const line = JSON.stringify(entry, jsonReplacer);
+    appendFileSync(this.file, line + "\n");
+    // Store what a restart would read back (bigints as strings), so readers see one shape.
+    this.entries.push(JSON.parse(line) as DecisionEntry);
   }
 
   /**
@@ -70,9 +78,7 @@ export class DecisionLog {
   sideForMarket(account: string, perpId: bigint, mode: "dry-run" | "live"): "long" | "short" | undefined {
     for (const e of this.all().reverse()) {
       if (e.account.toLowerCase() !== account.toLowerCase() || e.mode !== mode) continue;
-      const d = e.detail as { perpId?: string; type?: string } | undefined;
-      const closedHere = e.kind === "close" || (e.kind === "guardian" && d?.type === "close");
-      if (closedHere && e.status === "sent" && d?.perpId === perpId.toString()) {
+      if (e.kind === "close" && e.status === "sent" && (e.detail as { perpId?: string })?.perpId === perpId.toString()) {
         return undefined; // closed after the last open
       }
       if (e.kind !== "plan" || !Array.isArray(e.detail)) continue;
@@ -87,11 +93,7 @@ export class DecisionLog {
   }
 
   private all(): DecisionEntry[] {
-    if (!existsSync(this.file)) return [];
-    return readFileSync(this.file, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map(l => JSON.parse(l) as DecisionEntry);
+    return [...this.entries];
   }
 
   recent(account?: string, limit = 50): DecisionEntry[] {

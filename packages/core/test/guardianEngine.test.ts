@@ -148,6 +148,18 @@ describe("evaluateGuardian", () => {
     expect(milder.actions[0]!.hit.observed).toBeCloseTo(40, 5);
   });
 
+  it("treats an insolvent position as infinitely levered", () => {
+    const m: GuardianMandate = { ...ladder, rules: [{ trigger: { kind: "maxLeverage", above: 10 }, action: { type: "close" } }] };
+    const underwater = input({ mark: 70_000, depositUsd: 50 }); // −100 USD PnL on 50 USD collateral
+    expect(evaluateGuardian(m, [pos(underwater)], EMPTY_GUARDIAN_STATE, now).actions[0]).toMatchObject({ type: "close" });
+  });
+
+  it("serves the worst position first when the daily cap allows one action", () => {
+    const m = { ...ladder, markets: ["BTC" as const, "ETH" as const], maxActionsPerDay: 1 };
+    const out = evaluateGuardian(m, [pos(tight, { market: "ETH" }), pos(danger)], EMPTY_GUARDIAN_STATE, now);
+    expect(out.actions).toMatchObject([{ market: "BTC", type: "reduce" }]);
+  });
+
   it("shares the daily cap and collateral budget across positions", () => {
     const m = { ...ladder, markets: ["BTC" as const, "ETH" as const], maxActionsPerDay: 1 };
     const out = evaluateGuardian(m, [pos(tight), pos(tight, { market: "ETH" })], EMPTY_GUARDIAN_STATE, now);
@@ -157,16 +169,25 @@ describe("evaluateGuardian", () => {
 });
 
 describe("simulateShock", () => {
-  it("escalates as the price falls and stops after the close", () => {
+  it("tops up first, then reduces, and a reduction improves the buffer", () => {
     const start = input({ mark: 80_000, depositUsd: 130 });
-    const path = [-0.005, -0.03, -0.06, -0.08, -0.1, -0.12, -0.13];
+    const path = [-0.005, -0.03, -0.06, -0.08, -0.09];
     const steps = simulateShock({ mandate: ladder, market: "BTC", position: start, path, stepSec: 600 });
     const kinds = steps.filter(s => s.action).map(s => s.action!.type);
-    expect(kinds[0]).toBe("addCollateral");
-    expect(kinds).toContain("reduce");
-    expect(kinds[kinds.length - 1]).toBe("close");
-    const closeAt = steps.findIndex(s => s.action?.type === "close");
-    expect(steps).toHaveLength(closeAt + 1);
+    expect(kinds.slice(0, 2)).toEqual(["addCollateral", "reduce"]);
+    const reduceAt = steps.findIndex(s => s.action?.type === "reduce");
+    expect(steps[reduceAt + 1]!.bufferPct!).toBeGreaterThan(steps[reduceAt]!.bufferPct!);
+  });
+
+  it("stops after a close", () => {
+    const closeOnly = { ...ladder, rules: [ladder.rules[2]!] };
+    const steps = simulateShock({ mandate: closeOnly, market: "BTC", position: critical, path: [0, -0.01, -0.02] });
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.action?.type).toBe("close");
+  });
+
+  it("rejects a move of -100% or worse", () => {
+    expect(() => simulateShock({ mandate: ladder, market: "BTC", position: healthy, path: [-1] })).toThrow(/move/);
   });
 
   it("does nothing on a flat path", () => {

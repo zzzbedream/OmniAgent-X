@@ -61,6 +61,10 @@ function observe(trigger: GuardianTrigger, m: PositionMetrics): number | null {
         ? null
         : (Math.max(0, -m.unrealizedPnlUsd) / m.collateralUsd) * 100;
     case "maxLeverage":
+      // metrics leave leverage null when equity <= 0; an insolvent position is the most levered there is.
+      if (m.effectiveLeverage === null && m.equityUsd !== null && m.equityUsd <= 0 && m.notionalUsd > 0) {
+        return Number.POSITIVE_INFINITY;
+      }
       return m.effectiveLeverage;
   }
 }
@@ -144,7 +148,11 @@ export function evaluateGuardian(
   const budget: Budget = { actionsToday: state.actionsToday, collateralAddedUsd: state.collateralAddedUsd };
   const actions: GuardianAction[] = [];
   const skipped: GuardianSkip[] = [];
-  for (const p of positions) {
+  // Worst buffer first, so a shared daily cap or collateral budget goes to the position that needs it most.
+  const byRisk = [...positions].sort(
+    (a, b) => (a.metrics.maintenanceBufferPct ?? Infinity) - (b.metrics.maintenanceBufferPct ?? Infinity),
+  );
+  for (const p of byRisk) {
     const outcome = decideForPosition(p, mandate, state, budget, nowSec);
     if (outcome === null) continue;
     if ("type" in outcome) {

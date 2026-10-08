@@ -17,3 +17,4 @@ export * from "./guardian/engine";
 export * from "./guardian/simulate";
 export * from "./guardian/compile";
 export * from "./guardian/describe";
+export * from "./guardian/compileRequest";

@@ -32,21 +32,75 @@ export type MandateRecord = {
 
 const utcDay = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
 
+/** State after one action, with the daily counter reset when the UTC day changed. Pure. */
+function advanceState(state: GuardianState, stateDay: string, action: GuardianAction, nowSec: number): GuardianState {
+  const today = stateDay === utcDay(nowSec) ? state : { ...state, actionsToday: 0 };
+  return {
+    lastActionAtSec: { ...today.lastActionAtSec, [action.market]: nowSec },
+    actionsToday: action.type === "close" ? today.actionsToday : today.actionsToday + 1,
+    collateralAddedUsd: today.collateralAddedUsd + (action.type === "addCollateral" ? action.usd : 0),
+  };
+}
+
+type Side = "long" | "short";
+
+/** Reads a JSON file; a corrupt one is moved aside (not deleted) so the worker can still start. */
+function loadJson<T>(file: string, empty: T): T {
+  if (!existsSync(file)) return empty;
+  try {
+    return JSON.parse(readFileSync(file, "utf8")) as T;
+  } catch (e) {
+    const aside = `${file}.corrupt-${Date.now()}`;
+    renameSync(file, aside);
+    console.error(`guardian: ${file} was unreadable (${(e as Error).message}); moved to ${aside}`);
+    return empty;
+  }
+}
+
+function writeAtomic(file: string, value: unknown) {
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value, jsonReplacer, 2));
+  renameSync(tmp, file);
+}
+
 /** Active mandates by account, persisted as one JSON file written atomically (temp file + rename). */
 export class GuardianStore {
   private readonly file: string;
-  private records: Record<string, MandateRecord> = {};
+  private readonly sidesFile: string;
+  private records: Record<string, MandateRecord>;
+  /** Side of each open position once resolved, by "account:market". Survives a close that did not fill. */
+  private sides: Record<string, Side>;
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
     this.file = join(dataDir, "guardian.json");
-    if (existsSync(this.file)) this.records = JSON.parse(readFileSync(this.file, "utf8")) as Record<string, MandateRecord>;
+    this.sidesFile = join(dataDir, "guardian-sides.json");
+    this.records = loadJson<Record<string, MandateRecord>>(this.file, {});
+    this.sides = loadJson<Record<string, Side>>(this.sidesFile, {});
   }
 
   private persist() {
-    const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.records, jsonReplacer, 2));
-    renameSync(tmp, this.file);
+    writeAtomic(this.file, this.records);
+  }
+
+  sideFor(account: string, market: string): Side | undefined {
+    return this.sides[`${account.toLowerCase()}:${market}`];
+  }
+
+  rememberSide(account: string, market: string, side: Side) {
+    const key = `${account.toLowerCase()}:${market}`;
+    if (this.sides[key] === side) return;
+    this.sides = { ...this.sides, [key]: side };
+    writeAtomic(this.sidesFile, this.sides);
+  }
+
+  /** Called when the position is observed absent on-chain, so a later position is not given a stale side. */
+  forgetSide(account: string, market: string) {
+    const key = `${account.toLowerCase()}:${market}`;
+    if (!(key in this.sides)) return;
+    const { [key]: _gone, ...rest } = this.sides;
+    this.sides = rest;
+    writeAtomic(this.sidesFile, this.sides);
   }
 
   /** A new mandate replaces the previous one for the account and starts from a clean state. */
@@ -84,12 +138,7 @@ export class GuardianStore {
   recordAction(account: string, action: GuardianAction, nowSec: number) {
     const rec = this.get(account);
     if (!rec) return;
-    const state = this.stateFor(account, nowSec);
-    const next: GuardianState = {
-      lastActionAtSec: { ...state.lastActionAtSec, [action.market]: nowSec },
-      actionsToday: action.type === "close" ? state.actionsToday : state.actionsToday + 1,
-      collateralAddedUsd: state.collateralAddedUsd + (action.type === "addCollateral" ? action.usd : 0),
-    };
+    const next = advanceState(rec.state, rec.stateDay, action, nowSec);
     this.records = { ...this.records, [account.toLowerCase()]: { ...rec, state: next, stateDay: utcDay(nowSec) } };
     this.persist();
   }
@@ -118,6 +167,8 @@ export const FAILURE_BACKOFF_SEC = 60;
 export class GuardianLoop {
   private readonly lastTick = new Map<string, TickStatus>();
   private readonly backoffUntil = new Map<string, number>();
+  /** Dry-run cooldowns and counters: in memory only, so a later live run starts from a clean state. */
+  private readonly dryRunState = new Map<string, { state: GuardianState; day: string }>();
   private timer?: ReturnType<typeof setInterval>;
   private running = false;
 
@@ -129,7 +180,9 @@ export class GuardianLoop {
 
   start(intervalMs: number) {
     if (intervalMs <= 0 || this.timer) return;
-    this.timer = setInterval(() => void this.tick(), intervalMs);
+    this.timer = setInterval(() => {
+      this.tick().catch(e => console.error("guardian tick failed", e));
+    }, intervalMs);
     this.timer.unref?.();
   }
 
@@ -144,8 +197,25 @@ export class GuardianLoop {
     this.running = true;
     try {
       const now = this.deps.now();
-      for (const rec of this.deps.store.active(now)) {
-        await this.deps.withLock(rec.account, () => this.guard(rec, now));
+      for (const snapshot of this.deps.store.active(now)) {
+        try {
+          await this.deps.withLock(snapshot.account, async () => {
+            // Re-read under the lock: a revoke or replacement may have won the lock since the snapshot.
+            const rec = this.deps.store.get(snapshot.account);
+            if (!rec || rec.mandateHash !== snapshot.mandateHash || rec.expiresAt <= now) return;
+            await this.guard(rec, now);
+          });
+        } catch (e) {
+          // One account's failure (disk, log) must not stop the others or crash the process.
+          const key = snapshot.account.toLowerCase();
+          const prev = this.lastTick.get(key);
+          this.lastTick.set(key, {
+            at: now,
+            actions: prev?.actions ?? [],
+            skipped: prev?.skipped ?? [],
+            error: (e as Error).message.slice(0, 300),
+          });
+        }
       }
     } finally {
       this.running = false;
@@ -171,11 +241,15 @@ export class GuardianLoop {
       return;
     }
     const ready = positions.filter(p => (this.backoffUntil.get(`${key}:${p.market}`) ?? 0) <= now);
-    const decision = evaluateGuardian(mandate, ready, this.deps.store.stateFor(key, now), now);
+    const state = this.stateFor(key, now);
+    const decision = evaluateGuardian(mandate, ready, state, now);
     this.lastTick.set(key, { at: now, ...decision });
 
     for (const action of decision.actions) {
       const position = ready.find(p => p.market === action.market)!;
+      // Closes skip the cooldown. In dry-run nothing closes, so log a would-be close once per cooldown.
+      const last = state.lastActionAtSec[action.market];
+      if (this.deps.mode === "dry-run" && last !== undefined && now - last < rec.mandate.cooldownSec) continue;
       let outcome: ExecutionOutcome;
       try {
         outcome = await this.deps.execute(rec, action, position);
@@ -184,8 +258,21 @@ export class GuardianLoop {
       }
       this.logAction(rec, action, outcome, now);
       if (outcome.status === "failed") this.backoffUntil.set(`${key}:${action.market}`, now + FAILURE_BACKOFF_SEC);
-      else this.deps.store.recordAction(key, action, now);
+      else this.record(key, action, now);
     }
+  }
+
+  private stateFor(key: string, now: number): GuardianState {
+    if (this.deps.mode === "live") return this.deps.store.stateFor(key, now);
+    const dry = this.dryRunState.get(key);
+    if (!dry) return EMPTY_GUARDIAN_STATE;
+    return dry.day === utcDay(now) ? dry.state : { ...dry.state, actionsToday: 0 };
+  }
+
+  private record(key: string, action: GuardianAction, now: number) {
+    if (this.deps.mode === "live") return this.deps.store.recordAction(key, action, now);
+    const dry = this.dryRunState.get(key) ?? { state: EMPTY_GUARDIAN_STATE, day: utcDay(now) };
+    this.dryRunState.set(key, { state: advanceState(dry.state, dry.day, action, now), day: utcDay(now) });
   }
 
   private logAction(rec: MandateRecord, action: GuardianAction, outcome: ExecutionOutcome, now: number) {

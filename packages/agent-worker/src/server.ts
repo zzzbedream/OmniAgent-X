@@ -70,7 +70,14 @@ export function createWorker(cfg: WorkerConfig) {
     log,
     mode,
     addCollateralEnabled: cfg.guardianAddCollateral,
-    readPositions: makePositionReader({ client, log, mode, perplApiUrl: cfg.perplApiUrl, indexerUrl: cfg.indexerUrl }),
+    readPositions: makePositionReader({
+      client,
+      log,
+      sides: guardianStore,
+      mode,
+      perplApiUrl: cfg.perplApiUrl,
+      indexerUrl: cfg.indexerUrl,
+    }),
     execute: async (rec, action, position) => {
       // The engine never acts on an unknown side; this guards the executor against a future engine bug.
       if (position.side === "unknown") return { status: "failed", error: "position side unknown" };

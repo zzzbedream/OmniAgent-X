@@ -4,6 +4,7 @@
 // to act on buffer rules.
 import {
   type GuardedPosition,
+  MARKET_SYMBOLS,
   type MarketSymbol,
   PERPL_TESTNET,
   marginFractionFromRaw,
@@ -16,25 +17,32 @@ import {
 } from "@omniagent/core";
 import type { PublicClient } from "viem";
 import { sideFromIndexer } from "./executor";
-import type { MandateRecord } from "./guardian";
+import type { GuardianStore, MandateRecord } from "./guardian";
 import type { DecisionLog } from "./log";
 
 const CONTEXT_TTL_MS = 60_000;
 
-/** Caches one async value for `ttlMs`; a failed load is not cached. */
+/** Caches one async value for `ttlMs`. A failed refresh serves the last good value; with none, it throws. */
 function cached<T>(load: () => Promise<T>, ttlMs: number): () => Promise<T> {
   let value: { v: T; at: number } | undefined;
   return async () => {
     if (value && Date.now() - value.at < ttlMs) return value.v;
-    const v = await load();
-    value = { v, at: Date.now() };
-    return v;
+    try {
+      const v = await load();
+      value = { v, at: Date.now() };
+      return v;
+    } catch (e) {
+      if (value) return value.v;
+      throw e;
+    }
   };
 }
 
 export function makePositionReader(deps: {
   client: PublicClient;
   log: DecisionLog;
+  /** Remembers each position's side once resolved (a close that did not fill must not make it unknown). */
+  sides: Pick<GuardianStore, "sideFor" | "rememberSide" | "forgetSide">;
   mode: "dry-run" | "live";
   perplApiUrl: string;
   indexerUrl?: string;
@@ -59,14 +67,18 @@ export function makePositionReader(deps: {
       // A context outage only disables buffer rules (null maintenance); drawdown and leverage still work.
       maintenanceBySymbol().catch(() => new Map<string, number | null>()),
     ]);
+    const open = new Set(onChain.map(p => p.market));
+    for (const market of MARKET_SYMBOLS) if (!open.has(market)) deps.sides.forgetSide(rec.account, market);
     return Promise.all(
       onChain.map(async (p): Promise<GuardedPosition> => {
         const perp = await readPerpSnapshot(deps.client, p.market as MarketSymbol);
         const perpId = PERPL_TESTNET.markets[p.market];
-        const side =
+        const resolved =
           deps.log.sideForMarket(rec.account, perpId, deps.mode) ??
-          (deps.indexerUrl ? await sideFromIndexer(deps.indexerUrl, p.positionTypeRaw) : undefined) ??
-          "unknown";
+          deps.sides.sideFor(rec.account, p.market) ??
+          (deps.indexerUrl ? await sideFromIndexer(deps.indexerUrl, p.positionTypeRaw) : undefined);
+        if (resolved) deps.sides.rememberSide(rec.account, p.market, resolved);
+        const side = resolved ?? "unknown";
         const metrics = positionMetrics({
           side,
           lotLNS: p.lotLNS,

@@ -70,6 +70,12 @@ describe("llmRolesFromEnv", () => {
     expect(missing).toEqual(["LLM_BASE_URL", "LLM_API_KEY"]);
   });
 
+  it("treats a blank LLM_MAX_TOKENS (as copied from .env.example) as unset", () => {
+    const { roles, missing } = llmRolesFromEnv({ ...env, LLM_MAX_TOKENS: "  " });
+    expect(missing).toEqual([]);
+    expect(roles?.parser.maxTokens).toBeUndefined();
+  });
+
   it("rejects a non-positive LLM_MAX_TOKENS instead of ignoring it", () => {
     const { roles, missing } = llmRolesFromEnv({ ...env, LLM_MAX_TOKENS: "0" });
     expect(roles).toBeNull();
