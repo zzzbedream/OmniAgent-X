@@ -134,7 +134,12 @@ try {
     await page.getByText(/Riesgo aprobado|Plan rechazado/).first().waitFor({ timeout: 90_000 });
     if (await page.getByText("Plan rechazado por las reglas").count()) throw new Error("plan rejected by the rules");
     const ticket = (await page.locator("article").first().innerText()).replace(/\s+/g, " ");
-    return ticket.slice(0, 90);
+    // The planner must answer in the user's language (Spanish request → Spanish reasoning).
+    const reasoning = (await page.locator("article details summary").first().innerText()).replace(/\s+/g, " ");
+    const spanishHits = (reasoning.match(/\b(el|la|de|en|con|para|corto|posición|riesgo|apalancamiento)\b/gi) ?? []).length;
+    const englishHits = (reasoning.match(/\b(the|with|for|short|position|risk|leverage)\b/gi) ?? []).length;
+    if (spanishHits <= englishHits) throw new Error(`reasoning not in Spanish: ${reasoning.slice(0, 160)}`);
+    return `${ticket.slice(0, 60)} | ${reasoning.slice(0, 110)}`;
   });
 
   await step("Aprobar con passkey → orden real", async () => {
@@ -144,6 +149,10 @@ try {
     const text = (await result.innerText()).replace(/\s+/g, " ");
     if (!/En vivo/i.test(text) || !/Enviada a Perpl/i.test(text)) throw new Error(text.slice(0, 200));
     txOpen = await result.locator("a[href*='/tx/']").first().getAttribute("href");
+    // After the agent answers, the button must say the plan was sent and stay disabled (no double submit).
+    const sent = page.getByRole("button", { name: /Plan enviado al agente/ });
+    await sent.waitFor({ timeout: 10_000 });
+    if (!(await sent.isDisabled())) throw new Error("approve button still enabled after the agent answered");
     return txOpen;
   });
 
@@ -153,7 +162,11 @@ try {
     await row.waitFor({ timeout: 60_000 });
     // The side must be known (indexer or worker log) and shown as a status chip, never "Lado ?".
     await page.locator("section[aria-label='Posiciones'] :is(.chip-short, .chip-long)").first().waitFor({ timeout: 45_000 });
-    return (await row.innerText()).replace(/\s+/g, " ").slice(0, 120);
+    // Sub-cent PnL must read 0.00, never "-0".
+    const summary = (await page.locator("section[aria-label='Resumen de la cuenta']").innerText()).replace(/\s+/g, " ");
+    const rowText = (await row.innerText()).replace(/\s+/g, " ");
+    if (/-0(?![.,\d])/.test(summary) || /-0(?![.,\d])/.test(rowText)) throw new Error(`"-0" PnL shown: ${rowText.slice(0, 80)}`);
+    return rowText.slice(0, 120);
   }, { soft: true });
 
   await step("Cerrar con passkey", async () => {

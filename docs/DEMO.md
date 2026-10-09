@@ -43,3 +43,10 @@ It saves a screenshot per step and a 375px video, and checks the open and close 
 
 First full pass, 2026-10-09: 11/11 steps. About 145 s end to end, of which 68 s was the 9 allowlist transactions on the
 public RPC; another run took 19 s for the same step. The round trip cost 0.01 AUSD.
+
+The script also checks the UI polish:
+- the planner's reasoning is in Spanish;
+- after the agent answers, the approve button reads "Plan enviado al agente" and is disabled;
+- a sub-cent PnL renders as `0.00`, never `-0`.
+
+Run 3, 2026-10-10 against image `redesign5`, passed 11/11. Open [tx](https://testnet.monadscan.com/tx/0x6d8d95526a7b1806be377b61fcc616254ee859d65c006a44e6d10d378237ba4d), close [tx](https://testnet.monadscan.com/tx/0x03ff9aa5e431bc61d102fcb014d2686ec9793263a0c50776bffc30a2e021429e).
