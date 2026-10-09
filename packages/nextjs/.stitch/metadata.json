@@ -1,0 +1,22 @@
+{
+  "projectId": "2629277470953966973",
+  "title": "OmniAgent X",
+  "screens": [
+    {
+      "screenId": "2317007294757649918",
+      "title": "DESIGN.md source",
+      "deviceType": "MOBILE"
+    }
+  ],
+  "designSystem": {
+    "assetId": "93bd64d9646b48458c240fde9d69c7c7",
+    "name": "OmniAgent Terminal",
+    "primaryColor": "#836ef9",
+    "backgroundColor": "#0b0b10",
+    "surfaceColor": "#13131b",
+    "longColor": "#2ee6a0",
+    "shortColor": "#ff5c7a",
+    "fontFamily": "INTER",
+    "dataFontFamily": "JetBrains Mono"
+  }
+}

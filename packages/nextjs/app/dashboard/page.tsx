@@ -14,6 +14,7 @@ import {
   PERPL_TESTNET,
   type PerpSnapshot,
   type PositionMetrics,
+  type SideLogEntry,
   marginFractionFromRaw,
   marketRow,
   portfolioSummary,
@@ -22,6 +23,7 @@ import {
   readDelegatedAccount,
   readPerpSnapshot,
   readPositions,
+  sideFromDecisionLog,
 } from "@omniagent/core";
 import type { NextPage } from "next";
 import { type Address, formatUnits, isAddress } from "viem";
@@ -51,7 +53,7 @@ type AccountView = {
 };
 
 const Dashboard: NextPage = () => {
-  const { account, walletClient } = useMera();
+  const { account, walletClient, confirm } = useMera();
   const [closing, setClosing] = useState<string>();
   const [closeResult, setCloseResult] = useState<string>();
   const market = useMarketData();
@@ -139,7 +141,10 @@ const Dashboard: NextPage = () => {
     return view.positions.map(p => {
       const perp = view.perps[p.market];
       const cfg = contextById.get(Number(p.perpId));
-      const side = sideForRaw(p.positionTypeRaw, indexed?.calibrations ?? []);
+      // Side only from verified sources: the indexer's calibration, else the worker's own log of the open it sent.
+      const fromIndexer = sideForRaw(p.positionTypeRaw, indexed?.calibrations ?? []);
+      const fromWorker = sideFromDecisionLog((decisions ?? []) as SideLogEntry[], view.address, p.perpId, "live");
+      const side: "long" | "short" | "unknown" = fromIndexer !== "unknown" ? fromIndexer : (fromWorker ?? "unknown");
       const metrics: PositionMetrics | undefined = perp
         ? positionMetrics({
             side,
@@ -159,7 +164,7 @@ const Dashboard: NextPage = () => {
         (Number(perp.priceDecimals) !== cfg.priceDecimals || Number(perp.lotDecimals) !== cfg.sizeDecimals);
       return { p, side, metrics, decimalsMismatch };
     });
-  }, [view, contextById, indexed]);
+  }, [view, contextById, indexed, decisions]);
 
   const summary = useMemo(
     () => portfolioSummary(rows.filter(r => r.metrics).map(r => ({ side: r.side, metrics: r.metrics! }))),
@@ -174,6 +179,8 @@ const Dashboard: NextPage = () => {
     setClosing(p.market);
     setCloseResult(undefined);
     try {
+      // Fingerprint / Face ID before the agent closes anything.
+      await confirm();
       const message = {
         owner: account.address,
         account: view.address,
@@ -207,31 +214,138 @@ const Dashboard: NextPage = () => {
   const coll = (v: bigint) => (view ? `${formatUnits(v, view.collateral.decimals)} ${view.collateral.symbol}` : "—");
   const staleSec = market.lastUpdate ? Math.round((Date.now() - market.lastUpdate) / 1000) : null;
 
-  return (
-    <div className="flex flex-col grow pt-8 px-4 gap-5 max-w-5xl mx-auto w-full">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-bold">Riesgo</h1>
-        <span className="text-xs opacity-70">
-          WS {market.status} · bloque {market.headBlock ?? "—"} · gaps heartbeat {market.gaps}
-          {staleSec !== null && ` · precios hace ${staleSec}s`}
-        </span>
-      </div>
-      {market.subErrors.length > 0 && <p className="text-error text-sm">Suscripción: {market.subErrors.join("; ")}</p>}
-      {contextError && <p className="text-warning text-sm">Config de mercados no disponible: {contextError}</p>}
+  const pnl = summary.totalUnrealizedPnlUsd;
+  // Colour by sign only when there is a number; null means no position has computable metrics.
+  const signTone = (n: number | null | undefined) =>
+    n === null || n === undefined ? "text-smoke" : n > 0 ? "text-long" : n < 0 ? "text-short" : "text-bone";
+  // Below a cent the sign is noise: show 0.00, not "-0".
+  const signed = (n: number | null | undefined) => {
+    if (n === null || n === undefined || !Number.isFinite(n)) return fmt(n);
+    const v = Math.abs(n) < 0.005 ? 0 : n;
+    return (v > 0 ? "+" : "") + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const isBufferLow = summary.minMaintenanceBufferPct !== null && summary.minMaintenanceBufferPct < BUFFER_WARN_PCT;
 
-      <section className="card bg-base-100 shadow p-4 gap-2 overflow-x-auto">
-        <h2 className="font-semibold">Mercados (Perpl testnet, en vivo)</h2>
-        <table className="table table-sm">
+  return (
+    <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6 lg:max-w-5xl">
+      <header className="flex flex-wrap items-end justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[28px] font-bold tracking-tight">Riesgo</h1>
+          <p className="text-sm text-ash">
+            Posiciones leídas on-chain, precios en vivo de Perpl y lo que hizo el agente.
+          </p>
+        </div>
+        <span className="num flex items-center gap-1.5 text-[11px] text-smoke">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${market.status === "open" ? "animate-pulse bg-long" : "bg-amber"}`}
+            aria-hidden
+          />
+          WS {market.status} · bloque {market.headBlock ?? "—"}
+          {staleSec !== null && ` · ${staleSec}s`}
+        </span>
+      </header>
+      {market.subErrors.length > 0 && <p className="text-sm text-short">Suscripción: {market.subErrors.join("; ")}</p>}
+      {contextError && <p className="text-sm text-amber">Config de mercados no disponible: {contextError}</p>}
+
+      <input
+        className="input input-bordered input-sm num w-full bg-raised"
+        placeholder="Dirección de DelegatedAccount (o inicia sesión en Cuenta)"
+        defaultValue={target}
+        onBlur={e => isAddress(e.target.value) && setTarget(e.target.value)}
+        aria-label="Cuenta a monitorear"
+      />
+      {readError && <p className="text-sm text-short">Lectura on-chain falló: {readError}</p>}
+
+      {view && (
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Resumen de la cuenta">
+          <div className="panel col-span-2 flex flex-col justify-between gap-3 p-4 lg:row-span-2">
+            <span className="label-caps">PnL no realizado (est.)</span>
+            <span className={`num text-[40px] font-semibold leading-none tracking-tight ${signTone(pnl)}`}>
+              {signed(pnl)} <span className="text-base text-smoke">USD</span>
+            </span>
+            <span className="num text-xs text-smoke">
+              {rows.length} {rows.length === 1 ? "posición" : "posiciones"} · leído{" "}
+              {new Date(view.readAt).toLocaleTimeString()}
+            </span>
+          </div>
+          <Tile label="Balance exchange" value={coll(view.balanceCNS)} />
+          <Tile label="Bloqueado" value={coll(view.lockedBalanceCNS)} />
+          <Tile label="Largo / corto" value={`${fmt(summary.longNotionalUsd)} / ${fmt(summary.shortNotionalUsd)}`} />
+          <Tile
+            label="Colchón vs MM (est.)"
+            value={summary.minMaintenanceBufferPct === null ? "—" : `${fmt(summary.minMaintenanceBufferPct)} pp`}
+            tone={isBufferLow ? "short" : undefined}
+          />
+        </section>
+      )}
+
+      {view && (
+        <section className="flex flex-col gap-2" aria-label="Posiciones">
+          <h2 className="label-caps">Posiciones</h2>
+          {rows.length === 0 ? (
+            <p className="panel p-4 text-sm text-ash">Sin posiciones abiertas.</p>
+          ) : (
+            rows.map(({ p, side, metrics: m, decimalsMismatch }) => {
+              const rowPnl = m?.unrealizedPnlUsd;
+              return (
+                <article key={p.market} className="panel flex flex-col gap-3 p-4">
+                  <header className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <span className="num font-semibold">{p.market}-PERP</span>
+                      {side === "long" ? (
+                        <span className="chip-long">Largo</span>
+                      ) : side === "short" ? (
+                        <span className="chip-short">Corto</span>
+                      ) : (
+                        <span className="chip-muted">Lado ? (raw {p.positionTypeRaw})</span>
+                      )}
+                      {decimalsMismatch && <span className="chip-sim">decimales</span>}
+                    </span>
+                    <span className={`num text-lg font-semibold ${signTone(rowPnl)}`}>{signed(rowPnl)}</span>
+                  </header>
+                  <dl className="num grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
+                    <Cell label="Tamaño" value={fmt(m?.size, 6)} />
+                    <Cell label="Entrada" value={fmt(m?.entryPrice)} />
+                    <Cell label="Mark" value={`${fmt(m?.markPrice)}${p.markPriceValid ? "" : " ⚠"}`} />
+                    <Cell label="Colateral" value={fmt(m?.collateralUsd)} />
+                    <Cell label="Apal. efectivo" value={m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"} />
+                    <Cell label="Liq. est." value={fmt(m?.estLiquidationPrice)} tone="amber" />
+                  </dl>
+                  {canClose && (
+                    <button
+                      className="btn btn-outline btn-sm border-short/50 text-short hover:border-short hover:bg-short/10"
+                      disabled={!!closing}
+                      onClick={() => closePosition(p)}
+                    >
+                      {closing === p.market ? "Confirma con tu huella…" : "Cerrar con passkey"}
+                    </button>
+                  )}
+                </article>
+              );
+            })
+          )}
+          {closeResult && (
+            <p className="num rounded-md border border-line bg-raised p-3 text-xs break-all text-ash">{closeResult}</p>
+          )}
+          <p className="text-[11px] text-smoke">
+            Estimaciones sin funding ni fees; Perpl no publica su fórmula de margen. MM = 100 / maintenance_margin según
+            los ejemplos de la documentación. El lado sale del indexador o del log del worker que abrió la posición;
+            nunca se adivina.
+          </p>
+        </section>
+      )}
+
+      <section className="panel flex flex-col gap-2 overflow-x-auto p-4" aria-label="Mercados">
+        <h2 className="label-caps">Mercados · Perpl testnet en vivo</h2>
+        <table className="num w-full whitespace-nowrap text-sm">
           <thead>
-            <tr>
-              <th>Mercado</th>
-              <th>Mark</th>
-              <th>Oráculo</th>
-              <th>Mark−oráculo</th>
-              <th>Spread</th>
-              <th>24h</th>
-              <th>OI</th>
-              <th>MM</th>
+            <tr className="text-left text-[11px] text-smoke">
+              <th className="py-1.5 font-medium">Mercado</th>
+              <th className="py-1.5 font-medium">Mark</th>
+              <th className="hidden py-1.5 font-medium sm:table-cell">Mark−orác.</th>
+              <th className="py-1.5 font-medium">Spread</th>
+              <th className="py-1.5 font-medium">24h</th>
+              <th className="py-1.5 font-medium">MM</th>
             </tr>
           </thead>
           <tbody>
@@ -241,18 +355,23 @@ const Dashboard: NextPage = () => {
               const cfg = contextById.get(id);
               const r = st && cfg ? marketRow(st, cfg.priceDecimals, cfg.sizeDecimals) : undefined;
               const mm = marginFractionFromRaw(cfg?.maintenanceMarginRaw);
+              const change = r?.change24hPct;
               return (
-                <tr key={sym}>
-                  <td>{sym}</td>
-                  <td>{fmt(r?.mark)}</td>
-                  <td>{fmt(r?.oracle)}</td>
-                  <td className={r?.markOracleDevBps && Math.abs(r.markOracleDevBps) > 50 ? "text-warning" : ""}>
+                <tr key={sym} className="border-t border-line">
+                  <td className="py-2 font-semibold">{sym}</td>
+                  <td className="py-2">{fmt(r?.mark)}</td>
+                  <td
+                    className={`hidden py-2 sm:table-cell ${r?.markOracleDevBps && Math.abs(r.markOracleDevBps) > 50 ? "text-amber" : "text-ash"}`}
+                  >
                     {fmt(r?.markOracleDevBps, 1)} bps
                   </td>
-                  <td>{fmt(r?.spreadBps, 1)} bps</td>
-                  <td>{fmt(r?.change24hPct)}%</td>
-                  <td>{fmt(r?.openInterest, 4)}</td>
-                  <td>{mm === null ? "—" : `${fmt(mm * 100)}%`}</td>
+                  <td className="py-2 text-ash">{fmt(r?.spreadBps, 1)} bps</td>
+                  <td
+                    className={`py-2 ${change && change > 0 ? "text-long" : change && change < 0 ? "text-short" : "text-ash"}`}
+                  >
+                    {fmt(change)}%
+                  </td>
+                  <td className="py-2 text-ash">{mm === null ? "—" : `${fmt(mm * 100)}%`}</td>
                 </tr>
               );
             })}
@@ -260,155 +379,54 @@ const Dashboard: NextPage = () => {
         </table>
       </section>
 
-      <section className="card bg-base-100 shadow p-4 gap-3">
-        <h2 className="font-semibold">Cuenta</h2>
-        <input
-          className="input input-bordered input-sm font-mono"
-          placeholder="Dirección de DelegatedAccount (o inicia sesión en Cuenta)"
-          defaultValue={target}
-          onBlur={e => isAddress(e.target.value) && setTarget(e.target.value)}
-          aria-label="Cuenta a monitorear"
-        />
-        {readError && <p className="text-error text-sm">Lectura on-chain falló: {readError}</p>}
-        {view && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div>
-              <div className="opacity-60">Balance exchange</div>
-              <div>{coll(view.balanceCNS)}</div>
-            </div>
-            <div>
-              <div className="opacity-60">Bloqueado</div>
-              <div>{coll(view.lockedBalanceCNS)}</div>
-            </div>
-            <div>
-              <div className="opacity-60">Exposición long / short</div>
-              <div>
-                {fmt(summary.longNotionalUsd)} / {fmt(summary.shortNotionalUsd)} USD
-              </div>
-            </div>
-            <div>
-              <div className="opacity-60">PnL no realizado (est.)</div>
-              <div>{fmt(summary.totalUnrealizedPnlUsd)} USD</div>
-            </div>
-            <div>
-              <div className="opacity-60">Nocional total</div>
-              <div>{fmt(summary.totalNotionalUsd)} USD</div>
-            </div>
-            <div>
-              <div className="opacity-60">Concentración máx.</div>
-              <div>{summary.concentration === null ? "—" : `${fmt(summary.concentration * 100)}%`}</div>
-            </div>
-            <div>
-              <div className="opacity-60">Colchón mínimo vs MM (est.)</div>
-              <div
-                className={
-                  summary.minMaintenanceBufferPct !== null && summary.minMaintenanceBufferPct < BUFFER_WARN_PCT
-                    ? "text-error font-semibold"
-                    : ""
-                }
-              >
-                {summary.minMaintenanceBufferPct === null ? "—" : `${fmt(summary.minMaintenanceBufferPct)} pp`}
-              </div>
-            </div>
-            <div>
-              <div className="opacity-60">Leído on-chain</div>
-              <div>{new Date(view.readAt).toLocaleTimeString()}</div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {view && (
-        <section className="card bg-base-100 shadow p-4 gap-2 overflow-x-auto">
-          <h2 className="font-semibold">Posiciones</h2>
-          {rows.length === 0 ? (
-            <p className="text-sm opacity-70">Sin posiciones abiertas.</p>
-          ) : (
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Mercado</th>
-                  <th>Lado</th>
-                  <th>Tamaño</th>
-                  <th>Entrada</th>
-                  <th>Mark</th>
-                  <th>Colateral</th>
-                  <th>PnL est.</th>
-                  <th>Apal. efectivo</th>
-                  <th>Liq. est.</th>
-                  {canClose && <th />}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ p, side, metrics: m, decimalsMismatch }) => (
-                  <tr key={p.market}>
-                    <td>
-                      {p.market}
-                      {decimalsMismatch && <span className="text-warning"> ⚠ decimales</span>}
-                    </td>
-                    <td>{side === "unknown" ? `? (raw ${p.positionTypeRaw})` : side}</td>
-                    <td>{fmt(m?.size, 6)}</td>
-                    <td>{fmt(m?.entryPrice)}</td>
-                    <td>
-                      {fmt(m?.markPrice)}
-                      {!p.markPriceValid && <span className="text-warning"> (inválido)</span>}
-                    </td>
-                    <td>{fmt(m?.collateralUsd)}</td>
-                    <td>{fmt(m?.unrealizedPnlUsd)}</td>
-                    <td>{m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"}</td>
-                    <td>{fmt(m?.estLiquidationPrice)}</td>
-                    {canClose && (
-                      <td>
-                        <button
-                          className="btn btn-xs btn-outline"
-                          disabled={!!closing}
-                          onClick={() => closePosition(p)}
-                        >
-                          {closing === p.market ? "Cerrando…" : "Cerrar"}
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {closeResult && <p className="text-sm break-all">{closeResult}</p>}
-          <p className="text-xs opacity-60">
-            Estimaciones sin funding ni fees; Perpl no publica su fórmula de margen. MM = 100 / maintenance_margin según
-            los ejemplos de la documentación. El lado se obtiene del indexador (orden de apertura en la misma
-            transacción); sin indexador se muestra el valor raw.
-          </p>
-        </section>
-      )}
-
-      <section className="card bg-base-100 shadow p-4 gap-2">
-        <h2 className="font-semibold">Decisiones del agente</h2>
+      <section className="panel flex flex-col gap-3 p-4" aria-label="Decisiones del agente">
+        <h2 className="label-caps">Decisiones del agente</h2>
         {!decisions ? (
-          <p className="text-sm opacity-70">Worker no disponible.</p>
+          <p className="text-sm text-ash">Worker no disponible.</p>
         ) : decisions.length === 0 ? (
-          <p className="text-sm opacity-70">Sin decisiones para esta cuenta.</p>
+          <p className="text-sm text-ash">Sin decisiones para esta cuenta.</p>
         ) : (
-          <ul className="text-xs flex flex-col gap-1">
+          <ol className="flex flex-col">
             {decisions.slice(0, 10).map((d, i) => (
-              <li key={i} className="font-mono break-all">
-                {String(d.ts)} · {String(d.mode)} · {String(d.status)} · plan {String(d.planHash).slice(0, 10)}…
+              <li key={i} className="flex items-start gap-3 border-l border-line pb-3 pl-3 last:pb-0">
+                <span
+                  className={`-ml-[17px] mt-1 h-2 w-2 shrink-0 rounded-full ${
+                    d.status === "sent" || d.status === "active"
+                      ? "bg-long"
+                      : d.status === "rejected" || d.status === "failed"
+                        ? "bg-short"
+                        : "bg-amber"
+                  }`}
+                  aria-hidden
+                />
+                <span className="flex flex-col gap-1">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-medium">{String(d.kind)}</span>
+                    <span className={d.mode === "live" ? "chip-live" : "chip-sim"}>
+                      {d.mode === "live" ? "En vivo" : "Simulación"}
+                    </span>
+                    <span className="chip-muted">{String(d.status)}</span>
+                  </span>
+                  <span className="num text-[11px] text-smoke">
+                    {new Date(String(d.ts)).toLocaleString()} · {String(d.planHash).slice(0, 12)}…
+                  </span>
+                </span>
               </li>
             ))}
-          </ul>
+          </ol>
         )}
       </section>
 
-      <section className="card bg-base-100 shadow p-4 gap-2">
-        <h2 className="font-semibold">Historial (Envio)</h2>
+      <section className="panel flex flex-col gap-2 p-4" aria-label="Historial indexado">
+        <h2 className="label-caps">Historial · Envio</h2>
         {!INDEXER_URL ? (
-          <p className="text-sm opacity-70">Indexador no configurado (NEXT_PUBLIC_INDEXER_URL).</p>
+          <p className="text-sm text-ash">Indexador no configurado (NEXT_PUBLIC_INDEXER_URL).</p>
         ) : indexerError ? (
-          <p className="text-error text-sm">{indexerError}</p>
+          <p className="text-sm text-short">{indexerError}</p>
         ) : (
-          <ul className="text-xs flex flex-col gap-1">
+          <ul className="num flex flex-col gap-1 text-xs text-ash">
             {(indexed?.events ?? []).map(e => (
-              <li key={e.id} className="font-mono break-all">
+              <li key={e.id} className="break-all">
                 #{e.block} · {e.kind}
                 {e.side ? ` · ${e.side}` : ""}
                 {e.perpId ? ` · perp ${e.perpId}` : ""} · {e.txHash.slice(0, 10)}…
@@ -421,5 +439,19 @@ const Dashboard: NextPage = () => {
     </div>
   );
 };
+
+const Tile = ({ label, value, tone }: { label: string; value: string; tone?: "short" }) => (
+  <div className="panel flex flex-col gap-1 p-3">
+    <span className="label-caps">{label}</span>
+    <span className={`num text-sm ${tone === "short" ? "font-semibold text-short" : "text-bone"}`}>{value}</span>
+  </div>
+);
+
+const Cell = ({ label, value, tone }: { label: string; value: string; tone?: "amber" }) => (
+  <div className="flex flex-col gap-0.5">
+    <dt className="text-[11px] text-smoke">{label}</dt>
+    <dd className={tone === "amber" ? "text-amber" : "text-bone"}>{value}</dd>
+  </div>
+);
 
 export default Dashboard;

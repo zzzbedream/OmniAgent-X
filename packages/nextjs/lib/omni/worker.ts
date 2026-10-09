@@ -17,6 +17,18 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+type FundStep =
+  | { status: "sent"; txHash: Hex }
+  | { status: "skipped"; reason: string }
+  | { status: "failed"; error: string };
+/** Gas station answer (agent-worker/src/gasStation.ts). */
+export type FundResult = {
+  status: "funded" | "not-needed" | "already-funded";
+  owner: Address;
+  mon?: FundStep;
+  collateral?: FundStep;
+};
+
 export type OperatorConsent = { operator: Address; owner: Address; nonce: string; deadline: string; signature: Hex };
 
 export const worker = {
@@ -24,6 +36,9 @@ export const worker = {
   /** Body: { owner, deadline, signature } — a ConsentRequest signed by the owner (see core CONSENT_REQUEST_TYPES). */
   consent: (body: { owner: Address; deadline: string; signature: Hex }) =>
     call<OperatorConsent>("/operator/consent", { method: "POST", body: JSON.stringify(body) }),
+  /** Body: { owner, deadline, signature } — a FundRequest signed by the owner (see core FUND_REQUEST_TYPES). */
+  fund: (body: { owner: Address; deadline: string; signature: Hex }) =>
+    call<FundResult>("/onboard/fund", { method: "POST", body: JSON.stringify(body) }),
   submitPlan: (body: unknown) =>
     call<Record<string, unknown>>("/plans", { method: "POST", body: JSON.stringify(body) }),
   close: (body: unknown) => call<Record<string, unknown>>("/close", { method: "POST", body: JSON.stringify(body) }),

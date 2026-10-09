@@ -72,9 +72,9 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
   };
 
   return (
-    <section className="card bg-base-100 shadow p-4 gap-3">
+    <section className="panel p-4 gap-3">
       <h2 className="font-semibold">Simular un shock</h2>
-      <p className="text-xs opacity-70">
+      <p className="text-xs text-smoke">
         Posición hipotética en BTC (precio de referencia {REFERENCE_PRICE.toLocaleString()} USD). Margen de
         mantenimiento {(mm * 100).toFixed(2)}%
         {maintenanceFraction === null ? " (supuesto: Perpl no respondió)" : " (de Perpl)"}. Es una estimación: ignora
@@ -84,7 +84,7 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
         <label className="form-control">
           <span>Lado</span>
           <select
-            className="select select-bordered select-sm"
+            className="select select-bordered w-full bg-raised select-sm"
             value={side}
             onChange={e => setSide(e.target.value as "long" | "short")}
           >
@@ -120,15 +120,15 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
           />
         </label>
       </div>
-      <button className="btn btn-secondary btn-sm self-start" disabled={!mandate} onClick={run}>
+      <button className="btn btn-outline btn-sm self-start border-line" disabled={!mandate} onClick={run}>
         Simular
       </button>
-      {err && <p className="text-error text-sm">{err}</p>}
+      {err && <p className="text-short text-sm">{err}</p>}
       {steps && (
         <ol className="text-sm flex flex-col gap-1">
           {steps.map(s => (
             <li key={s.t}>
-              <span className="opacity-60">
+              <span className="text-smoke">
                 {(s.move * 100).toFixed(1)}% → {s.markPrice.toLocaleString()} USD · distancia{" "}
                 {s.bufferPct === null ? "—" : `${s.bufferPct.toFixed(1)}%`}:{" "}
               </span>

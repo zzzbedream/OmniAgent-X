@@ -39,7 +39,7 @@ const toWire = (m: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(m).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]));
 
 const Guardian: NextPage = () => {
-  const { account, walletClient } = useMera();
+  const { account, walletClient, confirm } = useMera();
   const [delegated, setDelegated] = useState<Address>();
   const [text, setText] = useState(EXAMPLE);
   const [compiled, setCompiled] = useState<CompiledMandate>();
@@ -122,6 +122,8 @@ const Guardian: NextPage = () => {
   const activate = () =>
     guarded("activate", async () => {
       if (!compiled || !account || !walletClient || !delegated) return;
+      // Fingerprint / Face ID before the guardian may act on the account.
+      await confirm();
       const message = {
         owner: account.address,
         account: delegated,
@@ -143,6 +145,7 @@ const Guardian: NextPage = () => {
   const revoke = () =>
     guarded("revoke", async () => {
       if (!account || !walletClient || !delegated) return;
+      await confirm();
       const message = {
         owner: account.address,
         account: delegated,
@@ -174,14 +177,14 @@ const Guardian: NextPage = () => {
   const blocked = !!compiled && compiled.violations.length > 0;
 
   return (
-    <div className="flex flex-col grow pt-8 px-4 gap-5 max-w-xl mx-auto w-full">
-      <h1 className="text-2xl font-bold">Guardián</h1>
-      <p className="text-sm opacity-80">
+    <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6">
+      <h1 className="text-[28px] font-bold tracking-tight">Guardián</h1>
+      <p className="text-sm text-ash">
         Dile al agente cómo protegerte. Firmas una vez con tu passkey y vigila tus posiciones cada pocos segundos: puede
         reducir o cerrar, nunca retirar tus fondos.
       </p>
       {!account && (
-        <p className="alert alert-warning">
+        <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
           Primero inicia sesión con tu passkey en{" "}
           <Link className="link" href="/onboard">
             Cuenta
@@ -190,7 +193,7 @@ const Guardian: NextPage = () => {
         </p>
       )}
       {account && !delegated && (
-        <p className="alert alert-warning">
+        <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
           Aún no tienes cuenta de trading.{" "}
           <Link className="link" href="/onboard">
             Créala aquí
@@ -204,7 +207,7 @@ const Guardian: NextPage = () => {
       <label className="form-control gap-1">
         <span className="text-sm">Tus reglas de protección</span>
         <textarea
-          className="textarea textarea-bordered h-28"
+          className="textarea textarea-bordered w-full bg-raised h-28"
           value={text}
           maxLength={1000}
           onChange={e => setText(e.target.value)}
@@ -214,7 +217,7 @@ const Guardian: NextPage = () => {
         {busy === "compile" ? "Traduciendo…" : "Traducir reglas"}
       </button>
 
-      {err && <p className="text-error text-sm break-words">{err}</p>}
+      {err && <p className="text-short text-sm break-words">{err}</p>}
 
       {compiled && (
         <>
@@ -222,7 +225,7 @@ const Guardian: NextPage = () => {
           <label className="form-control gap-1">
             <span className="text-sm">Vigencia del mandato</span>
             <select
-              className="select select-bordered"
+              className="select select-bordered w-full bg-raised"
               value={ttlDays}
               onChange={e => setTtlDays(Number(e.target.value) as (typeof TTL_OPTIONS)[number])}
             >
@@ -233,7 +236,7 @@ const Guardian: NextPage = () => {
               ))}
             </select>
           </label>
-          <button className="btn btn-accent" disabled={!canSign || blocked} onClick={activate}>
+          <button className="btn btn-primary h-12" disabled={!canSign || blocked} onClick={activate}>
             {busy === "activate"
               ? "Firmando…"
               : status?.active

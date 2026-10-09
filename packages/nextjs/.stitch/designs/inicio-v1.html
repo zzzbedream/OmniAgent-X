@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html class="dark" lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>OmniAgent X - Inicio</title>
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "background": "#0b0b10",
+            "surface": "#13131b",
+            "surface-dim": "#14121a",
+            "surface-bright": "#3a3841",
+            "surface-container-lowest": "#0e0d15",
+            "surface-container-low": "#1c1a23",
+            "surface-container": "#201f27",
+            "surface-container-high": "#2b2932",
+            "outline": "#2a2a3a",
+            "outline-strong": "#3d3a55",
+            "on-surface": "#ece9f5",
+            "on-surface-variant": "#9a97ab",
+            "muted": "#6b687c",
+            "primary": "#836ef9",
+            "primary-container": "#221c45",
+            "long": "#2ee6a0",
+            "short": "#ff5c7a",
+            "warning": "#f5b84a",
+            "info": "#6fa8ff",
+            "error": "#ff5c7a"
+          },
+          fontFamily: {
+            "title": ["Inter", "sans-serif"],
+            "label-caps": ["Inter", "sans-serif"],
+            "data": ["JetBrains Mono", "monospace"],
+            "data-lg": ["JetBrains Mono", "monospace"],
+            "display": ["Inter", "sans-serif"],
+            "body": ["Inter", "sans-serif"]
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      text-transform: none;
+      letter-spacing: normal;
+      word-wrap: normal;
+      white-space: nowrap;
+      direction: ltr;
+      -webkit-font-smoothing: antialiased;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface antialiased selection:bg-primary selection:text-background min-h-screen flex justify-center">
+
+<!-- Mobile Simulator (375px bounded) -->
+<div class="w-full max-w-[375px] min-h-screen bg-background relative flex flex-col pb-12 border-x border-outline/30">
+
+  <!-- 1. TOP BAR -->
+  <header class="sticky top-0 z-40 bg-surface/90 backdrop-blur-md border-b border-outline h-14 px-4 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded bg-surface-container flex items-center justify-center border border-outline">
+        <span class="material-symbols-outlined text-primary text-[18px]">terminal</span>
+      </div>
+      <span class="font-title font-bold text-[17px] text-on-surface tracking-tight leading-none">OmniAgent X</span>
+    </div>
+
+    <!-- Pill Monad Testnet -->
+    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-low border border-outline">
+      <span class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-long opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-long"></span>
+      </span>
+      <span class="font-data text-[11px] text-on-surface-variant font-medium tracking-tight">Monad testnet</span>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col gap-7 px-4 pt-5">
+
+    <!-- 2. HERO SECTION -->
+    <section class="flex flex-col gap-4">
+      <div class="inline-flex items-center gap-1.5 self-start px-2 py-0.5 rounded bg-primary-container border border-primary/30 text-primary">
+        <span class="material-symbols-outlined text-xs">shield</span>
+        <span class="font-label-caps text-[10px] uppercase font-bold tracking-wider">Trading co-pilot passkey-native</span>
+      </div>
+
+      <!-- Headline -->
+      <div class="space-y-2">
+        <h1 class="font-display font-extrabold text-[32px] leading-[1.1] tracking-[-0.03em] text-on-surface">
+          Tu riesgo, en <br/>tus palabras.
+        </h1>
+        <p class="font-body text-[14px] leading-[21px] text-on-surface-variant">
+          La IA propone. Las reglas deciden. Tú firmas con tu passkey.
+        </p>
+      </div>
+
+      <!-- Floating Order Ticket Preview -->
+      <div class="relative pt-1 pb-1">
+        <div class="relative bg-surface-container-low border border-outline-strong rounded-xl p-3 shadow-xl transform rotate-[-1.5deg] hover:rotate-0 transition-transform duration-300">
+          <div class="flex items-center justify-between pb-2 border-b border-outline">
+            <div class="flex items-center gap-2">
+              <span class="px-1.5 py-0.5 rounded bg-error/15 border border-error/40 text-short font-data text-[10px] font-bold">
+                CORTO
+              </span>
+              <span class="font-data text-[12px] font-semibold text-on-surface">ETH-PERP</span>
+            </div>
+            <span class="font-data text-[11px] text-muted">5.00 USD · 1x</span>
+          </div>
+
+          <div class="mt-2.5 flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-long text-[16px]">verified</span>
+              <span class="font-data text-[11px] text-long font-medium">Riesgo aprobado</span>
+            </div>
+            <div class="flex items-center gap-1 text-muted font-data text-[10px]">
+              <span class="material-symbols-outlined text-[13px] text-primary">fingerprint</span>
+              <span>Listo para firma</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero CTAs -->
+      <div class="flex flex-col gap-2.5 pt-1">
+        <button class="w-full h-12 bg-primary hover:bg-[#725cf5] active:scale-[0.99] text-[#0b0b10] font-title font-semibold rounded-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_16px_rgba(131,110,249,0.3)]">
+          <span class="material-symbols-outlined text-xl">fingerprint</span>
+          <span class="text-[15px] font-bold">Crear passkey</span>
+        </button>
+        <button class="text-center font-title text-[13px] font-medium text-on-surface-variant hover:text-on-surface transition-colors py-1">
+          Ya tengo passkey →
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. PIPELINE STRIP -->
+    <section class="bg-surface rounded-xl border border-outline p-3.5 flex flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-outline/70 pb-2">
+        <span class="font-label-caps text-[10px] uppercase font-bold text-muted tracking-wider">Flujo de ejecución determinista</span>
+        <span class="font-data text-[10px] text-primary">5 pasos seguros</span>
+      </div>
+
+      <div class="relative py-1">
+        <!-- Connecting Line -->
+        <div class="absolute left-3 right-3 top-4 h-0.5 bg-outline z-0"></div>
+
+        <div class="grid grid-cols-5 gap-1 relative z-10">
+          <!-- Step 1 -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-7 h-7 rounded-full bg-surface-container border border-long text-long flex items-center justify-center font-data text-[10px] font-bold shadow-sm">
+              <span class="material-symbols-outlined text-[14px]">edit_note</span>
+            </div>
+            <span class="font-title text-[10px] font-semibold text-on-surface mt-1.5 leading-tight">Instrucción</span>
+            <span class="font-body text-[9px] text-muted leading-tight mt-0.5">En español</span>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-7 h-7 rounded-full bg-surface-container border border-long text-long flex items-center justify-center font-data text-[10px] font-bold">
+              <span class="material-symbols-outlined text-[14px]">psychology</span>
+            </div>
+            <span class="font-title text-[10px] font-semibold text-on-surface mt-1.5 leading-tight">Plan IA</span>
+            <span class="font-body text-[9px] text-muted leading-tight mt-0.5">Orden exacta</span>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-7 h-7 rounded-full bg-surface-container border border-long text-long flex items-center justify-center font-data text-[10px] font-bold">
+              <span class="material-symbols-outlined text-[14px]">rule</span>
+            </div>
+            <span class="font-title text-[10px] font-semibold text-on-surface mt-1.5 leading-tight">Reglas</span>
+            <span class="font-body text-[9px] text-muted leading-tight mt-0.5">Límites duros</span>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-7 h-7 rounded-full bg-primary-container border border-primary text-primary flex items-center justify-center font-data text-[10px] font-bold shadow-[0_0_8px_rgba(131,110,249,0.4)]">
+              <span class="material-symbols-outlined text-[14px]">fingerprint</span>
+            </div>
+            <span class="font-title text-[10px] font-semibold text-primary mt-1.5 leading-tight">Passkey</span>
+            <span class="font-body text-[9px] text-primary/80 leading-tight mt-0.5">Firma tuya</span>
+          </div>
+
+          <!-- Step 5 -->
+          <div class="flex flex-col items-center text-center">
+            <div class="w-7 h-7 rounded-full bg-surface-container border border-outline text-muted flex items-center justify-center font-data text-[10px] font-bold">
+              <span class="material-symbols-outlined text-[14px]">bolt</span>
+            </div>
+            <span class="font-title text-[10px] font-semibold text-muted mt-1.5 leading-tight">Ejecución</span>
+            <span class="font-body text-[9px] text-muted leading-tight mt-0.5">Perpl DEX</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. CUSTODY BLOCK -->
+    <section class="bg-surface rounded-xl border border-outline p-4 flex flex-col gap-3">
+      <div>
+        <div class="flex items-center gap-1.5 text-primary mb-1">
+          <span class="material-symbols-outlined text-sm">security</span>
+          <span class="font-label-caps text-[10px] uppercase font-bold tracking-wider">Garantía de custodia autónoma</span>
+        </div>
+        <h2 class="font-title text-[17px] font-bold text-on-surface tracking-tight">
+          El agente opera. Nunca retira.
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <!-- PUEDE -->
+        <div class="bg-surface-container-low rounded-lg p-3 border border-outline flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-1 text-long font-label-caps text-[11px] font-bold mb-2">
+              <span class="material-symbols-outlined text-xs">check_circle</span>
+              <span>PUEDE</span>
+            </div>
+            <ul class="space-y-1.5 font-body text-[11px] text-on-surface-variant leading-tight">
+              <li class="flex items-start gap-1">
+                <span class="text-long font-bold leading-none mt-0.5">·</span>
+                <span>Abrir y cerrar posiciones</span>
+              </li>
+              <li class="flex items-start gap-1">
+                <span class="text-long font-bold leading-none mt-0.5">·</span>
+                <span>Solo en ETH BTC SOL MON</span>
+              </li>
+              <li class="flex items-start gap-1">
+                <span class="text-long font-bold leading-none mt-0.5">·</span>
+                <span>Dentro de tu presupuesto</span>
+              </li>
+            </ul>
+          </div>
+          <div class="mt-3 pt-2 border-t border-outline/50 font-data text-[9px] text-muted">
+            Permisos restringidos
+          </div>
+        </div>
+
+        <!-- NO PUEDE -->
+        <div class="bg-error/5 rounded-lg p-3 border border-error/30 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-1 text-short font-label-caps text-[11px] font-bold mb-2">
+              <span class="material-symbols-outlined text-xs">lock</span>
+              <span>NO PUEDE</span>
+            </div>
+            <ul class="space-y-1.5 font-body text-[11px] text-on-surface-variant leading-tight">
+              <li class="flex items-start gap-1">
+                <span class="text-short font-bold leading-none mt-0.5">·</span>
+                <span class="text-on-surface font-medium">Retirar fondos</span>
+              </li>
+              <li class="flex items-start gap-1">
+                <span class="text-short font-bold leading-none mt-0.5">·</span>
+                <span>Superar el apalancamiento máx.</span>
+              </li>
+              <li class="flex items-start gap-1">
+                <span class="text-short font-bold leading-none mt-0.5">·</span>
+                <span>Operar sin tu firma</span>
+              </li>
+            </ul>
+          </div>
+          <div class="mt-3 pt-2 border-t border-error/20 font-data text-[9px] text-short/80 font-medium">
+            Solo tú puedes retirar
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. LIVE MARKETS TICKER -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-center justify-between px-0.5">
+        <span class="font-label-caps text-[11px] font-bold uppercase tracking-wider text-muted">Mercados perp en vivo</span>
+        <span class="font-data text-[10px] text-on-surface-variant">Perpl testnet · en vivo</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <!-- ETH -->
+        <div class="bg-surface rounded-lg border border-outline p-2.5 flex items-center justify-between">
+          <div>
+            <span class="font-data text-[11px] text-muted font-bold block">ETH-PERP</span>
+            <span class="font-data text-[14px] font-semibold text-on-surface">2,443.10</span>
+          </div>
+          <!-- Sparkline -->
+          <svg class="w-12 h-6 text-long" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 48 24">
+            <polyline points="0,18 10,14 20,16 30,8 40,11 48,4"></polyline>
+          </svg>
+        </div>
+
+        <!-- BTC -->
+        <div class="bg-surface rounded-lg border border-outline p-2.5 flex items-center justify-between">
+          <div>
+            <span class="font-data text-[11px] text-muted font-bold block">BTC-PERP</span>
+            <span class="font-data text-[14px] font-semibold text-on-surface">81,843.5</span>
+          </div>
+          <svg class="w-12 h-6 text-long" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 48 24">
+            <polyline points="0,16 12,18 24,10 34,12 42,6 48,5"></polyline>
+          </svg>
+        </div>
+
+        <!-- SOL -->
+        <div class="bg-surface rounded-lg border border-outline p-2.5 flex items-center justify-between">
+          <div>
+            <span class="font-data text-[11px] text-muted font-bold block">SOL-PERP</span>
+            <span class="font-data text-[14px] font-semibold text-on-surface">110.55</span>
+          </div>
+          <svg class="w-12 h-6 text-short" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 48 24">
+            <polyline points="0,6 10,8 20,5 30,14 38,12 48,19"></polyline>
+          </svg>
+        </div>
+
+        <!-- MON -->
+        <div class="bg-surface rounded-lg border border-outline p-2.5 flex items-center justify-between">
+          <div>
+            <span class="font-data text-[11px] text-muted font-bold block">MON-PERP</span>
+            <span class="font-data text-[14px] font-semibold text-on-surface">0.0236</span>
+          </div>
+          <svg class="w-12 h-6 text-long" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 48 24">
+            <polyline points="0,20 12,15 22,17 32,9 40,8 48,2"></polyline>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. HOW IT WORKS (Horizontal Scroll Cards) -->
+    <section class="flex flex-col gap-2.5">
+      <div class="flex items-center justify-between px-0.5">
+        <h3 class="font-title text-[15px] font-bold text-on-surface tracking-tight">Cómo funciona</h3>
+        <span class="font-data text-[10px] text-muted">Desliza para ver pasos</span>
+      </div>
+
+      <div class="-mx-4 px-4 flex gap-3 overflow-x-auto no-scrollbar py-1">
+        <!-- Card 1 -->
+        <div class="flex-shrink-0 w-[210px] bg-surface rounded-xl border border-outline p-3.5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-data text-[11px] font-bold text-primary px-2 py-0.5 rounded bg-primary-container border border-primary/30">01</span>
+              <span class="material-symbols-outlined text-primary text-sm">passkey</span>
+            </div>
+            <h4 class="font-title text-[13px] font-bold text-on-surface mb-1">Crea tu passkey</h4>
+            <p class="font-body text-[11px] text-on-surface-variant leading-relaxed">
+              Autenticación WebAuthn nativa con Face ID o Touch ID. Sin seed phrase ni custodia externa.
+            </p>
+          </div>
+          <span class="font-data text-[9px] text-muted mt-3">Mera passkeys protocol</span>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="flex-shrink-0 w-[210px] bg-surface rounded-xl border border-outline p-3.5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-data text-[11px] font-bold text-primary px-2 py-0.5 rounded bg-primary-container border border-primary/30">02</span>
+              <span class="material-symbols-outlined text-primary text-sm">account_balance_wallet</span>
+            </div>
+            <h4 class="font-title text-[13px] font-bold text-on-surface mb-1">Abre tu cuenta</h4>
+            <p class="font-body text-[11px] text-on-surface-variant leading-relaxed">
+              Deposita AUSD de prueba en Perpl. Define presupuesto máximo y límite diario de riesgo.
+            </p>
+          </div>
+          <span class="font-data text-[9px] text-muted mt-3">Smart account delegada</span>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="flex-shrink-0 w-[210px] bg-surface rounded-xl border border-outline p-3.5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-data text-[11px] font-bold text-primary px-2 py-0.5 rounded bg-primary-container border border-primary/30">03</span>
+              <span class="material-symbols-outlined text-primary text-sm">chat</span>
+            </div>
+            <h4 class="font-title text-[13px] font-bold text-on-surface mb-1">Describe tu estrategia</h4>
+            <p class="font-body text-[11px] text-on-surface-variant leading-relaxed">
+              Escribe en español claro: el modelo estructura los parámetros de mercado en segundos.
+            </p>
+          </div>
+          <span class="font-data text-[9px] text-muted mt-3">DeepSeek Trading Agent</span>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="flex-shrink-0 w-[210px] bg-surface rounded-xl border border-outline p-3.5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-data text-[11px] font-bold text-primary px-2 py-0.5 rounded bg-primary-container border border-primary/30">04</span>
+              <span class="material-symbols-outlined text-primary text-sm">verified_user</span>
+            </div>
+            <h4 class="font-title text-[13px] font-bold text-on-surface mb-1">Aprueba y vigila</h4>
+            <p class="font-body text-[11px] text-on-surface-variant leading-relaxed">
+              El guardián evalúa las reglas. Firmas con tu huella y el bot ejecuta con slippage controlado.
+            </p>
+          </div>
+          <span class="font-data text-[9px] text-muted mt-3">Firma EIP-712</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. STACK STRIP -->
+    <section class="border-y border-outline/70 py-3 flex flex-col items-center gap-1.5 text-center">
+      <span class="font-label-caps text-[9px] uppercase tracking-widest text-muted">Infraestructura & Arquitectura</span>
+      <div class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 font-data text-[11px] text-on-surface-variant">
+        <span class="text-on-surface font-medium">Mera passkeys</span>
+        <span class="text-outline">·</span>
+        <span class="text-on-surface font-medium">Perpl</span>
+        <span class="text-outline">·</span>
+        <span class="text-on-surface font-medium">Monad</span>
+        <span class="text-outline">·</span>
+        <span class="text-on-surface font-medium">DeepSeek</span>
+      </div>
+    </section>
+
+    <!-- 8. FOOTER -->
+    <footer class="pt-1 pb-4 flex flex-col items-center text-center gap-2">
+      <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-surface-container border border-outline text-muted font-data text-[10px]">
+        <span class="material-symbols-outlined text-xs text-warning">warning</span>
+        <span>Testnet · Sin dinero real</span>
+      </div>
+      <p class="font-body text-[11px] text-muted max-w-[280px] leading-tight">
+        Hackathon Monad Metropolis · Monad Testnet · Perpl DEX Protocol.
+      </p>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

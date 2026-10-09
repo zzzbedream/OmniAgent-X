@@ -71,6 +71,23 @@ export async function signInMeraAccount(): Promise<MeraEvmAccount> {
   return { session, address, credentialId };
 }
 
+/**
+ * Step-up check before an action that moves funds or changes the account: one more biometric prompt
+ * (Mera always requests the PRF with userVerification "required"), and the passkey must derive the same
+ * address as the signed-in session. The temporary key is discarded; signing still uses the session.
+ */
+export async function confirmMeraAccount(account: MeraEvmAccount): Promise<void> {
+  const known = loadCredential();
+  const credential = known?.credentialId === account.credentialId ? known : { credentialId: account.credentialId };
+  const { prfOutput } = await getPasskeyPrfOutput({ rpId: location.hostname, credential });
+  const derived = deriveEvmAccount(prfOutput);
+  prfOutput.fill(0);
+  derived.session.end();
+  if (derived.address.toLowerCase() !== account.address.toLowerCase()) {
+    throw new Error("Esa passkey no corresponde a la cuenta con la que iniciaste sesión.");
+  }
+}
+
 export function toViem(account: MeraEvmAccount) {
   return toViemAccount(account.session);
 }

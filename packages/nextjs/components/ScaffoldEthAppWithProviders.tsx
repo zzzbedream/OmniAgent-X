@@ -9,23 +9,25 @@ import { Toaster } from "react-hot-toast";
 import { WagmiProvider } from "wagmi";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
+import { TabBar } from "~~/components/omni/TabBar";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
-import { useInitializeNativeCurrencyPrice } from "~~/hooks/scaffold-eth";
 import { MeraProvider } from "~~/services/mera/MeraProvider";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
+// The scaffold's useInitializeNativeCurrencyPrice is not called: it read the ETH price from mainnet Uniswap
+// through a shared Alchemy key for a footer widget this app no longer shows, and failed on CORS.
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
-  useInitializeNativeCurrencyPrice();
-
   return (
     <>
-      <div className={`flex flex-col min-h-screen `}>
-        <Header />
-        <main className="relative flex flex-col flex-1">
-          <MeraProvider>{children}</MeraProvider>
-        </main>
-        <Footer />
-      </div>
+      {/* Mera wraps the whole shell so the header can show the signed-in account. */}
+      <MeraProvider>
+        <div className="flex min-h-screen flex-col">
+          <Header />
+          <main className="relative flex flex-1 flex-col">{children}</main>
+          <Footer />
+          <TabBar />
+        </div>
+      </MeraProvider>
       <Toaster />
     </>
   );
@@ -51,7 +53,7 @@ export const ScaffoldEthAppWithProviders = ({ children }: { children: React.Reac
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <ProgressBar height="3px" color="#2299dd" />
+        <ProgressBar height="2px" color="#836ef9" />
         <RainbowKitProvider
           avatar={BlockieAvatar}
           theme={mounted ? (isDarkMode ? darkTheme() : lightTheme()) : lightTheme()}

@@ -8,6 +8,7 @@ import {
   APPROVAL_DOMAIN,
   type AllowlistChange,
   CONSENT_REQUEST_TYPES,
+  FUND_REQUEST_TYPES,
   PERPL_TESTNET,
   PERPL_TESTNET_MIN_DEPOSIT_AUSD,
   PERPL_TESTNET_MIN_OPEN_AUSD,
@@ -21,7 +22,9 @@ import {
   readDelegatedAccount,
 } from "@omniagent/core";
 import type { NextPage } from "next";
-import { type Address, formatEther, formatUnits, isAddress, parseEventLogs, parseUnits } from "viem";
+import { type Address, formatEther, formatUnits, isAddress, parseEther, parseEventLogs, parseUnits } from "viem";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
+import { EXPLORER_TX, friendlyTxError, shortHex } from "~~/components/omni/format";
 import { loadDelegatedAccount, saveDelegatedAccount, worker } from "~~/lib/omni/worker";
 import { publicClient, useMera } from "~~/services/mera/MeraProvider";
 
@@ -38,16 +41,23 @@ type Status = {
   workerMode?: string;
 };
 
+/** Below this the passkey address cannot pay for onboarding; the gas station tops it up (0.5 MON). */
+const LOW_GAS_WEI = parseEther("0.05");
+
 const Onboard: NextPage = () => {
-  const { account, walletClient, busy, error, create, signIn, end } = useMera();
+  const { account, walletClient, busy, error, create, signIn, confirm, end } = useMera();
   const [userName, setUserName] = useState("");
   const [status, setStatus] = useState<Status>();
   const [delegated, setDelegated] = useState<Address>();
   const [amount, setAmount] = useState(String(PERPL_TESTNET_MIN_OPEN_AUSD));
   const [log, setLog] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
+  const [fundState, setFundState] = useState<"idle" | "running" | "done">("idle");
 
-  const push = (line: string) => setLog(prev => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 30));
+  const push = useCallback(
+    (line: string) => setLog(prev => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 30)),
+    [],
+  );
 
   const refresh = useCallback(async () => {
     if (!account) return;
@@ -88,15 +98,48 @@ const Onboard: NextPage = () => {
     } catch (e) {
       push(`error leyendo estado: ${(e as Error).message}`);
     }
-  }, [account, delegated]);
+  }, [account, delegated, push]);
 
   useEffect(() => {
+    // A different passkey is a different user: forget the previous one's balances and funding attempt.
+    setStatus(undefined);
+    setFundState("idle");
     if (account) setDelegated(loadDelegatedAccount(account.address));
   }, [account]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // A brand-new passkey address has no MON, so it cannot send the first onboarding transaction (the Perpl
+  // contracts require the owner as sender). Ask the worker's testnet gas station once, as soon as it is seen.
+  const requestTestFunds = useCallback(async () => {
+    if (!account || !walletClient) return;
+    setFundState("running");
+    try {
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+      const signature = await walletClient.signTypedData({
+        domain: APPROVAL_DOMAIN(PERPL_TESTNET.chainId),
+        types: FUND_REQUEST_TYPES,
+        primaryType: "FundRequest",
+        message: { owner: account.address, deadline },
+      });
+      const r = await worker.fund({ owner: account.address, deadline: deadline.toString(), signature });
+      if (r.status === "already-funded") push("fondos de prueba: esta dirección ya los recibió antes");
+      if (r.mon?.status === "sent") push(`gas de prueba recibido ${r.mon.txHash}`);
+      if (r.collateral?.status === "sent") push(`AUSD de prueba recibidos ${r.collateral.txHash}`);
+      if (r.collateral?.status === "failed") push(`AUSD de prueba falló (usa el faucet abajo): ${r.collateral.error}`);
+    } catch (e) {
+      push(`fondos de prueba falló: ${friendlyTxError(e)}`);
+    } finally {
+      setFundState("done");
+      void refresh();
+    }
+  }, [account, walletClient, refresh, push]);
+
+  useEffect(() => {
+    if (fundState === "idle" && status && status.monBalance < LOW_GAS_WEI) void requestTestFunds();
+  }, [fundState, status, requestTestFunds]);
 
   const tx = async (label: string, fn: () => Promise<`0x${string}`>) => {
     setPending(true);
@@ -108,7 +151,7 @@ const Onboard: NextPage = () => {
       push(`${label}: confirmada`);
       return receipt;
     } catch (e) {
-      push(`${label} falló: ${(e as Error).message.split("\n")[0]}`);
+      push(`${label} falló: ${friendlyTxError(e)}`);
       return undefined;
     } finally {
       setPending(false);
@@ -116,8 +159,20 @@ const Onboard: NextPage = () => {
     }
   };
 
+  /** One fingerprint / Face ID per user action, even when the action sends several transactions. */
+  const confirmed = async (label: string) => {
+    try {
+      await confirm();
+      return true;
+    } catch (e) {
+      push(`${label}: ${friendlyTxError(e)}`);
+      return false;
+    }
+  };
+
   const createTradingAccount = async () => {
     if (!account || !walletClient) return;
+    if (!(await confirmed("crear cuenta de trading"))) return;
     let consent;
     try {
       // Prove control of the owner address before the worker signs an operator consent for it.
@@ -130,7 +185,7 @@ const Onboard: NextPage = () => {
       });
       consent = await worker.consent({ owner: account.address, deadline: deadline.toString(), signature });
     } catch (e) {
-      push(`worker no disponible: ${(e as Error).message}`);
+      push(`worker no disponible: ${friendlyTxError(e)}`);
       return;
     }
     const receipt = await tx("crear cuenta delegada", () =>
@@ -156,6 +211,7 @@ const Onboard: NextPage = () => {
   // One owner transaction per selector, same changes as Perpl's SyncOperatorAllowlistScript.
   const repairAllowlist = async () => {
     if (!walletClient || !status?.account) return;
+    if (!(await confirmed("reparar permisos"))) return;
     const acc = status.account;
     for (const change of acc.allowlistDrift) {
       const ok = await tx(`${change.allowed ? "permitir" : "revocar"} ${change.name}`, () =>
@@ -172,6 +228,7 @@ const Onboard: NextPage = () => {
 
   const deposit = async () => {
     if (!walletClient || !status?.account) return;
+    if (!(await confirmed("depositar"))) return;
     const amountCNS = parseUnits(amount, status.collateral.decimals);
     const acc = status.account;
     // Tokens must sit in the DelegatedAccount before createAccount/depositCollateral pull them.
@@ -225,6 +282,9 @@ const Onboard: NextPage = () => {
   const withdraw = async () => {
     if (!walletClient || !status?.account) return;
     const acc = status.account;
+    // Withdrawing leaves the agent nothing to trade with, so ask once.
+    if (!window.confirm(`¿Retirar ${amount} ${status.collateral.symbol} del exchange a tu wallet?`)) return;
+    if (!(await confirmed("retirar"))) return;
     await tx("retirar colateral", () =>
       walletClient.writeContract({
         address: acc.address,
@@ -238,56 +298,100 @@ const Onboard: NextPage = () => {
   const fmt = (v: bigint | undefined) =>
     v === undefined || !status ? "—" : `${formatUnits(v, status.collateral.decimals)} ${status.collateral.symbol}`;
 
-  return (
-    <div className="flex flex-col grow pt-8 px-4 gap-6 max-w-xl mx-auto w-full">
-      <h1 className="text-2xl font-bold">Cuenta</h1>
+  const isAllowlistOk = !!status?.account && status.account.allowlistDrift.length === 0;
+  const isAccountOpen = !!status?.account && status.account.accountId > 0n;
 
-      <section className="card bg-base-100 shadow p-4 gap-3">
-        <h2 className="font-semibold">1 · Passkey (Mera)</h2>
+  return (
+    <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-[28px] font-bold tracking-tight">Cuenta</h1>
+        <p className="text-sm text-ash">
+          Tu passkey es la llave. El agente opera tu cuenta, pero solo tú puedes retirar.
+        </p>
+      </header>
+
+      <section className="panel flex flex-col gap-3 p-4">
+        <StepHeader n={1} title="Passkey" detail="Mera · sin frase semilla" isDone={!!account} />
         {!account ? (
           <>
             <input
-              className="input input-bordered w-full"
+              className="input input-bordered w-full bg-raised"
               placeholder="Nombre para el passkey (p. ej. tu email)"
               value={userName}
               onChange={e => setUserName(e.target.value)}
               aria-label="Nombre del passkey"
             />
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2">
               <button className="btn btn-primary" disabled={busy || !userName} onClick={() => create(userName)}>
                 Crear passkey
               </button>
-              <button className="btn btn-secondary" disabled={busy} onClick={signIn}>
+              <button className="btn btn-outline border-line" disabled={busy} onClick={signIn}>
                 Ya tengo passkey
               </button>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-sm break-all">{account.address}</span>
-            <button className="btn btn-ghost btn-sm" onClick={end}>
-              Cerrar sesión
+          <div className="flex items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2">
+            <span className="num text-sm break-all">{account.address}</span>
+            <button className="btn btn-ghost btn-sm text-ash" onClick={end}>
+              Salir
             </button>
           </div>
         )}
-        {error && <p className="text-error text-sm">{error}</p>}
-        {account && status && <p className="text-sm">Gas: {formatEther(status.monBalance)} MON</p>}
+        {error && <p className="text-sm text-short">{error}</p>}
+        {account && status && (
+          <p className="num text-xs text-smoke">
+            Gas:{" "}
+            <span className={status.monBalance >= LOW_GAS_WEI ? "text-ash" : "text-short"}>
+              {formatEther(status.monBalance)} MON
+            </span>
+          </p>
+        )}
+        {fundState === "running" && (
+          <p className="flex items-center gap-2 rounded-md border border-violet/40 bg-violet-wash px-3 py-2 text-sm">
+            <span className="loading loading-spinner loading-xs text-violet" aria-hidden />
+            Preparando tu cuenta: enviando gas y AUSD de prueba…
+          </p>
+        )}
+        {account && status && fundState === "done" && status.monBalance < LOW_GAS_WEI && (
+          <button className="btn btn-outline btn-sm self-start border-line" onClick={requestTestFunds}>
+            Reintentar gas de prueba
+          </button>
+        )}
       </section>
 
       {account && (
-        <section className="card bg-base-100 shadow p-4 gap-3">
-          <h2 className="font-semibold">2 · Cuenta de trading (Perpl DelegatedAccount)</h2>
-          <p className="text-sm opacity-70">
-            El agente (operador <span className="font-mono">{status?.operator ?? "?"}</span>, modo {status?.workerMode})
-            puede operar pero no retirar.
+        <section className="panel flex flex-col gap-3 p-4">
+          <StepHeader
+            n={2}
+            title="Cuenta de trading"
+            detail="Perpl DelegatedAccount"
+            isDone={!!delegated && !!status?.account?.isOperator}
+          />
+          <p className="text-sm text-ash">
+            El agente <span className="num text-bone">{status?.operator ? shortHex(status.operator) : "?"}</span> puede
+            operar pero no retirar.{" "}
+            {status?.workerMode && (
+              <span className={status.workerMode === "LIVE" ? "chip-live" : "chip-sim"}>
+                {status.workerMode === "LIVE"
+                  ? "En vivo"
+                  : status.workerMode === "dry-run"
+                    ? "Simulación"
+                    : status.workerMode}
+              </span>
+            )}
           </p>
           {!delegated ? (
             <div className="flex flex-col gap-2">
-              <button className="btn btn-primary" disabled={pending} onClick={createTradingAccount}>
+              <button
+                className="btn btn-primary"
+                disabled={pending || fundState === "running"}
+                onClick={createTradingAccount}
+              >
                 Crear cuenta de trading
               </button>
               <input
-                className="input input-bordered input-sm w-full"
+                className="input input-bordered input-sm w-full bg-raised"
                 placeholder="…o pega la dirección de una cuenta existente"
                 onChange={e => {
                   if (isAddress(e.target.value)) {
@@ -299,38 +403,39 @@ const Onboard: NextPage = () => {
               />
             </div>
           ) : (
-            <dl className="grid grid-cols-2 gap-1 text-sm">
-              <dt>Cuenta delegada</dt>
-              <dd className="font-mono break-all">{delegated}</dd>
-              <dt>Owner correcto</dt>
-              <dd>{status?.account ? String(status.account.owner === account.address) : "—"}</dd>
-              <dt>Operador activo</dt>
-              <dd>{status?.account?.isOperator === undefined ? "—" : String(status.account.isOperator)}</dd>
-              <dt>Account ID (exchange)</dt>
-              <dd>{status?.account?.accountId.toString() ?? "—"}</dd>
-              <dt>Balance exchange</dt>
-              <dd>{fmt(status?.account?.balanceCNS)}</dd>
-              <dt>Bloqueado</dt>
-              <dd>{fmt(status?.account?.lockedBalanceCNS)}</dd>
-              <dt>Tu colateral (wallet)</dt>
-              <dd>{fmt(status?.ownerCollateral)}</dd>
+            <dl className="rounded-md border border-line bg-raised px-3">
+              <KeyValue label="Cuenta delegada">
+                <span className="num">{shortHex(delegated)}</span>
+              </KeyValue>
+              <KeyValue label="Owner correcto">
+                <Check value={status?.account ? status.account.owner === account.address : undefined} />
+              </KeyValue>
+              <KeyValue label="Operador activo">
+                <Check value={status?.account?.isOperator} />
+              </KeyValue>
+              <KeyValue label="Account ID (exchange)">
+                <span className="num">{status?.account?.accountId.toString() ?? "—"}</span>
+              </KeyValue>
             </dl>
           )}
         </section>
       )}
 
       {account && delegated && status?.account && status.account.allowlistDrift.length > 0 && (
-        <section className="card bg-base-100 shadow p-4 gap-3 border border-warning">
-          <h2 className="font-semibold">Permisos del agente desactualizados</h2>
-          <p className="text-sm">
-            La Factory de Perpl en testnet crea cuentas con una allowlist antigua: el agente todavía no puede llamar a{" "}
-            <code>execOrder</code>. Esto aplica los mismos cambios que el script oficial de Perpl (
-            {status.account.allowlistDrift.length} transacciones firmadas por ti).
+        <section className="flex flex-col gap-3 rounded-[var(--radius-box)] border border-amber/40 bg-amber/5 p-4">
+          <h2 className="font-semibold text-amber">Permisos del agente desactualizados</h2>
+          <p className="text-sm text-ash">
+            La Factory de Perpl en testnet crea cuentas con una allowlist antigua, y el agente aún no puede llamar a{" "}
+            <code className="num text-bone">execOrder</code>. Esto aplica los mismos cambios que el script oficial de
+            Perpl: {status.account.allowlistDrift.length} transacciones firmadas por ti.
           </p>
-          <ul className="text-xs list-disc pl-5">
+          <ul className="flex flex-col gap-1 text-xs">
             {status.account.allowlistDrift.map(c => (
-              <li key={c.selector}>
-                {c.allowed ? "permitir" : "revocar"} {c.name} ({c.selector})
+              <li key={c.selector} className="flex items-center justify-between gap-2">
+                <span className={c.allowed ? "text-long" : "text-short"}>
+                  {c.allowed ? "permitir" : "revocar"} {c.name}
+                </span>
+                <span className="num text-smoke">{c.selector}</span>
               </li>
             ))}
           </ul>
@@ -341,36 +446,127 @@ const Onboard: NextPage = () => {
       )}
 
       {account && delegated && status?.account && (
-        <section className="card bg-base-100 shadow p-4 gap-3">
-          <h2 className="font-semibold">3 · Depositar / retirar</h2>
-          <p className="text-xs opacity-70">
-            Colateral: {status.collateral.symbol} ({status.collateral.token}), leído on-chain del Exchange. Abrir la
-            cuenta pide al menos {PERPL_TESTNET_MIN_OPEN_AUSD} AUSD; los depósitos siguientes, al menos{" "}
-            {PERPL_TESTNET_MIN_DEPOSIT_AUSD}.
-          </p>
-          <input
-            className="input input-bordered w-full"
-            inputMode="decimal"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            aria-label="Monto"
+        <section className="panel flex flex-col gap-4 p-4">
+          <StepHeader
+            n={3}
+            title="Colateral"
+            detail={`${status.collateral.symbol} · leído on-chain`}
+            isDone={isAccountOpen && isAllowlistOk}
           />
-          <button className="btn btn-outline btn-sm self-start" disabled={pending} onClick={requestAusd}>
-            Pedir AUSD de prueba (faucet de Agora)
-          </button>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Stat label="En el exchange" value={fmt(status.account.balanceCNS)} isHero />
+            <Stat label="En tu wallet" value={fmt(status.ownerCollateral)} />
+            <Stat label="Bloqueado" value={fmt(status.account.lockedBalanceCNS)} />
+            <Stat
+              label="Mínimos"
+              value={`abrir ${PERPL_TESTNET_MIN_OPEN_AUSD} · luego ${PERPL_TESTNET_MIN_DEPOSIT_AUSD}`}
+            />
+          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-caps">Monto</span>
+            <div className="flex items-center rounded-[var(--radius-field)] border border-line bg-raised focus-within:border-violet">
+              <input
+                className="num w-full bg-transparent px-3 py-2.5 text-[15px] outline-none"
+                inputMode="decimal"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                aria-label="Monto"
+              />
+              <span className="num pr-3 text-sm text-smoke">{status.collateral.symbol}</span>
+            </div>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
             <button className="btn btn-primary" disabled={pending} onClick={deposit}>
-              {status.account.accountId === 0n ? "Depositar y abrir cuenta" : "Depositar"}
+              {status.account.accountId === 0n ? "Depositar y abrir" : "Depositar"}
             </button>
-            <button className="btn" disabled={pending || status.account.accountId === 0n} onClick={withdraw}>
+            <button
+              className="btn btn-outline border-short/50 text-short hover:border-short hover:bg-short/10"
+              disabled={pending || status.account.accountId === 0n}
+              onClick={withdraw}
+            >
               Retirar
             </button>
           </div>
+          <button className="btn btn-ghost btn-sm self-start text-ash" disabled={pending} onClick={requestAusd}>
+            Pedir AUSD de prueba (faucet de Agora)
+          </button>
         </section>
       )}
 
-      {log.length > 0 && <pre className="text-xs bg-base-300 p-3 rounded whitespace-pre-wrap">{log.join("\n")}</pre>}
+      {log.length > 0 && (
+        <section className="panel flex flex-col gap-2 p-4" aria-label="Actividad">
+          <h2 className="label-caps">Actividad</h2>
+          <ol className="flex flex-col gap-1.5">
+            {log.map((line, i) => (
+              <LogLine key={`${i}-${line}`} line={line} />
+            ))}
+          </ol>
+        </section>
+      )}
     </div>
+  );
+};
+
+const StepHeader = ({ n, title, detail, isDone }: { n: number; title: string; detail: string; isDone: boolean }) => (
+  <header className="flex items-center gap-3">
+    <span
+      className={`num flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs ${
+        isDone ? "border-violet bg-violet text-void" : "border-line-strong bg-violet-wash text-violet"
+      }`}
+    >
+      {isDone ? "✓" : n}
+    </span>
+    <span className="flex flex-col">
+      <span className="font-semibold">{title}</span>
+      <span className="text-xs text-smoke">{detail}</span>
+    </span>
+  </header>
+);
+
+const KeyValue = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-line py-2 text-sm last:border-b-0">
+    <dt className="text-ash">{label}</dt>
+    <dd className="text-right">{children}</dd>
+  </div>
+);
+
+const Check = ({ value }: { value: boolean | undefined }) =>
+  value === undefined ? (
+    <span className="text-smoke">—</span>
+  ) : value ? (
+    <CheckCircleIcon className="inline h-5 w-5 text-long" aria-label="sí" />
+  ) : (
+    <XCircleIcon className="inline h-5 w-5 text-short" aria-label="no" />
+  );
+
+const Stat = ({ label, value, isHero = false }: { label: string; value: string; isHero?: boolean }) => (
+  <div className="flex flex-col gap-1 rounded-md border border-line bg-raised p-3">
+    <span className="label-caps">{label}</span>
+    <span className={`num ${isHero ? "text-lg font-semibold text-bone" : "text-sm text-ash"}`}>{value}</span>
+  </div>
+);
+
+/** Activity line: state dot from the verb, and any tx hash linked to the explorer. */
+const LogLine = ({ line }: { line: string }) => {
+  const hash = line.match(/0x[0-9a-fA-F]{64}/)?.[0];
+  const isFail = / falló|error|no disponible/.test(line);
+  const isDone = /confirmada|cuenta delegada:/.test(line);
+  const text = hash ? line.replace(hash, "") : line;
+  return (
+    <li className="flex items-start gap-2 text-xs">
+      <span
+        className={`mt-1 h-2 w-2 shrink-0 rounded-full ${isFail ? "bg-short" : isDone ? "bg-long" : "bg-amber"}`}
+        aria-hidden
+      />
+      <span className={`break-words ${isFail ? "text-short" : "text-ash"}`}>
+        {text}
+        {hash && (
+          <a className="link num ml-1" href={`${EXPLORER_TX}${hash}`} target="_blank" rel="noopener noreferrer">
+            {shortHex(hash, 10, 6)}
+          </a>
+        )}
+      </span>
+    </li>
   );
 };
 

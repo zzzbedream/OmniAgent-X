@@ -31,7 +31,7 @@ const LABEL: Record<string, string> = {
 /** Guardian history from the worker's decision log. Links are built only from well-formed tx hashes. */
 export function GuardianFeed({ entries, onRate }: Props) {
   const rows = entries.filter(e => e.kind === "guardian" || e.kind === "mandate" || e.kind === "revoke");
-  if (rows.length === 0) return <p className="text-sm opacity-60">Todavía no hay acciones del guardián.</p>;
+  if (rows.length === 0) return <p className="text-sm text-smoke">Todavía no hay acciones del guardián.</p>;
   return (
     <ul className="flex flex-col gap-2">
       {rows.map(e => {
@@ -41,13 +41,11 @@ export function GuardianFeed({ entries, onRate }: Props) {
         return (
           <li key={`${e.ts}-${e.kind}-${text}`} className="text-sm border-l-4 border-base-300 pl-3">
             <div className="flex gap-2 items-center flex-wrap">
-              <span className="opacity-60 text-xs">{new Date(e.ts).toLocaleString()}</span>
-              <span className={`badge badge-sm ${e.status === "failed" ? "badge-error" : "badge-ghost"}`}>
-                {e.status}
-              </span>
+              <span className="text-smoke text-xs">{new Date(e.ts).toLocaleString()}</span>
+              <span className={e.status === "failed" ? "chip-short" : "chip-muted"}>{e.status}</span>
             </div>
             <p>{text}</p>
-            {d.error && <p className="text-error text-xs break-words">{d.error}</p>}
+            {d.error && <p className="text-short text-xs break-words">{d.error}</p>}
             {tx && (
               <a className="link text-xs" href={`${EXPLORER_TX}${tx}`} target="_blank" rel="noopener noreferrer">
                 Ver transacción
@@ -78,17 +76,17 @@ function RateButtons({ onRate }: { onRate: (helpful: boolean) => Promise<void> }
       setState("error");
     }
   };
-  if (state === "done") return <p className="text-xs text-success">Calificación registrada en ERC-8004.</p>;
+  if (state === "done") return <p className="text-xs text-long">Calificación registrada en ERC-8004.</p>;
   return (
     <div className="flex gap-2 items-center text-xs mt-1">
-      <span className="opacity-70">¿Te protegió? (reputación on-chain, ERC-8004)</span>
+      <span className="text-smoke">¿Te protegió? (reputación on-chain, ERC-8004)</span>
       <button className="btn btn-xs" disabled={state === "sending"} onClick={() => rate(true)}>
         Sí
       </button>
       <button className="btn btn-xs" disabled={state === "sending"} onClick={() => rate(false)}>
         No
       </button>
-      {state === "error" && <span className="text-error">no se pudo enviar</span>}
+      {state === "error" && <span className="text-short">no se pudo enviar</span>}
     </div>
   );
 }

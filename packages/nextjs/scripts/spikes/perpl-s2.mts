@@ -2,7 +2,7 @@
 //
 // Run (Node >= 22.6, from packages/nextjs):
 //   node --experimental-strip-types scripts/spikes/perpl-s2.mts            # read-only checks
-//   OWNER_PK=0x.. OPERATOR_PK=0x.. DEPOSIT=10 \
+//   OWNER_PK=0x.. OPERATOR_PK=0x.. DEPOSIT=100 \
 //   node --experimental-strip-types scripts/spikes/perpl-s2.mts --write    # create account + deposit + fix allowlist
 //   OPERATOR_PK=0x.. DELEGATED_ACCOUNT=0x.. \
 //   node --experimental-strip-types scripts/spikes/perpl-s2.mts --test-order   # operator posts a resting BTC bid
@@ -30,7 +30,8 @@ import { monadTestnet } from "viem/chains";
 const RPC_URL = process.env.MONAD_TESTNET_RPC ?? "https://testnet-rpc.monad.xyz";
 const FACTORY: Address = "0xf42548Ccb3300Bc76c35dc2D347416db2E8d7209";
 const EXCHANGE: Address = "0x1964C32f0bE608E7D29302AFF5E61268E72080cc";
-const COLLATERAL: Address = "0xdf5b718d8fcc173335185a2a1513ee8151e3c027"; // testnet "USD", not AUSD
+// The collateral token is read on-chain (Exchange.getExchangeInfo), never hard-coded: api-docs and the fork test
+// disagree, and on 2026-10-07 the exchange reported AUSD (docs/VERIFIED_FACTS.md).
 
 const factoryAbi = parseAbi([
   "function EXCHANGE() view returns (address)",
@@ -47,6 +48,7 @@ const accountAbi = parseAbi([
   "function owner() view returns (address)",
 ]);
 const exchangeAbi = parseAbi([
+  "function getExchangeInfo() view returns (uint256 balanceCNS, uint256 protocolBalanceCNS, uint256 recycleBalanceCNS, uint256 collateralDecimals, address collateralToken, address verifierProxy)",
   "function execOrder((uint256 orderDescId, uint256 perpId, uint8 orderType, uint256 orderId, uint256 pricePNS, uint256 lotLNS, uint256 expiryBlock, bool postOnly, bool fillOrKill, bool immediateOrCancel, uint256 maxMatches, uint256 leverageHdths, uint256 lastExecutionBlock, uint256 amountCNS, uint256 maxNegPnlCollatBPS) orderDesc) returns ((uint256 perpId, uint256 orderId) signature)",
   "function getPerpetualInfo(uint256 perpId) view returns ((string name, string symbol, uint256 priceDecimals, uint256 lotDecimals, bytes32 linkFeedId, uint256 priceTolPer100K, uint256 marginTol, uint256 marginTolDecimals, uint256 refPriceMaxAgeSec, uint256 positionBalanceCNS, uint256 insuranceBalanceCNS, uint256 markPNS, uint256 markTimestamp, uint256 lastPNS, uint256 lastTimestamp, uint256 oraclePNS, uint256 oracleTimestampSec, uint256 longOpenInterestLNS, uint256 shortOpenInterestLNS, uint256 fundingStartBlock, int16 fundingRatePct100k, uint256 absFundingClampPctPer100K, uint8 status, uint256 basePricePNS, uint256 maxBidPriceONS, uint256 minBidPriceONS, uint256 maxAskPriceONS, uint256 minAskPriceONS, uint256 numOrders, bool ignOracle) perpetualInfo)",
 ]);
@@ -83,7 +85,6 @@ async function readOnlyChecks() {
   for (const [name, address] of [
     ["factory", FACTORY],
     ["exchange", EXCHANGE],
-    ["collateral", COLLATERAL],
   ] as const) {
     const code = await publicClient.getCode({ address });
     check(`${name} has code`, !!code && code !== "0x", address);
@@ -98,24 +99,32 @@ async function readOnlyChecks() {
     boundExchange.toLowerCase() === EXCHANGE.toLowerCase(),
     boundExchange,
   );
+  const [, , , , collateral] = await publicClient.readContract({
+    address: EXCHANGE,
+    abi: exchangeAbi,
+    functionName: "getExchangeInfo",
+  });
+  const code = await publicClient.getCode({ address: collateral });
+  check("collateral has code", !!code && code !== "0x", collateral);
   const [symbol, decimals] = await Promise.all([
-    publicClient.readContract({ address: COLLATERAL, abi: erc20Abi, functionName: "symbol" }),
-    publicClient.readContract({ address: COLLATERAL, abi: erc20Abi, functionName: "decimals" }),
+    publicClient.readContract({ address: collateral, abi: erc20Abi, functionName: "symbol" }),
+    publicClient.readContract({ address: collateral, abi: erc20Abi, functionName: "decimals" }),
   ]);
   console.log(`INFO  collateral symbol=${symbol} decimals=${decimals}`);
-  return { decimals };
+  return { collateral, decimals };
 }
 
-async function createAndFund(decimals: number) {
+async function createAndFund(collateral: Address, decimals: number) {
   const ownerPk = process.env.OWNER_PK as Hex | undefined;
   const operatorPk = process.env.OPERATOR_PK as Hex | undefined;
   if (!ownerPk || !operatorPk) throw new Error("OWNER_PK and OPERATOR_PK are required with --write");
   const owner = privateKeyToAccount(ownerPk);
   const operator = privateKeyToAccount(operatorPk);
-  const deposit = parseUnits(process.env.DEPOSIT ?? "10", decimals);
+  // Opening an account needs min_account_open_amount (100 on testnet, /v1/pub/context on 2026-10-07).
+  const deposit = parseUnits(process.env.DEPOSIT ?? "100", decimals);
 
   const balance = await publicClient.readContract({
-    address: COLLATERAL,
+    address: collateral,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [owner.address],
@@ -159,7 +168,7 @@ async function createAndFund(decimals: number) {
   console.log(`INFO  DelegatedAccount=${proxy}`);
 
   const transferHash = await wallet.writeContract({
-    address: COLLATERAL,
+    address: collateral,
     abi: erc20Abi,
     functionName: "transfer",
     args: [proxy, deposit],
@@ -273,6 +282,6 @@ async function testOrder() {
   }
 }
 
-const { decimals } = await readOnlyChecks();
-if (process.argv.includes("--write")) await createAndFund(decimals);
+const { collateral, decimals } = await readOnlyChecks();
+if (process.argv.includes("--write")) await createAndFund(collateral, decimals);
 if (process.argv.includes("--test-order")) await testOrder();

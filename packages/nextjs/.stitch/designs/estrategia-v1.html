@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OmniAgent X - Estrategia</title>
+<!-- Google Fonts: Inter & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed-dim": "#a8c8ff",
+            "on-tertiary-fixed-variant": "#663e00",
+            "surface-tint": "#c8bfff",
+            "primary-container": "#221c45",
+            "on-primary": "#0b0b10",
+            "on-error-container": "#ffdad6",
+            "surface-dim": "#14121a",
+            "outline": "#2a2a3a",
+            "on-surface": "#e5e0ec",
+            "outline-variant": "#484554",
+            "short": "#ff5c7a",
+            "primary-fixed": "#e5deff",
+            "surface-container": "#201f27",
+            "surface-container-lowest": "#0e0d15",
+            "on-secondary-fixed-variant": "#00468a",
+            "secondary-fixed": "#d6e3ff",
+            "surface-variant": "#35343d",
+            "surface-container-high": "#2b2932",
+            "surface": "#13131b",
+            "surface-raised": "#1b1b26",
+            "inverse-primary": "#5d46d1",
+            "on-secondary-container": "#b4ceff",
+            "primary-fixed-dim": "#c8bfff",
+            "on-primary-fixed-variant": "#4528b8",
+            "on-tertiary-fixed": "#2b1700",
+            "on-tertiary": "#472a00",
+            "tertiary-container": "#c98115",
+            "secondary": "#a8c8ff",
+            "surface-container-highest": "#35343d",
+            "on-surface-variant": "#c9c4d6",
+            "warning": "#f5b84a",
+            "on-error": "#690005",
+            "tertiary-fixed": "#ffddb9",
+            "inverse-on-surface": "#312f38",
+            "background": "#0b0b10",
+            "outline-strong": "#3d3a55",
+            "on-primary-container": "#27008a",
+            "error-container": "#93000a",
+            "surface-bright": "#3a3841",
+            "primary": "#836ef9",
+            "tertiary-fixed-dim": "#ffb962",
+            "inverse-surface": "#e5e0ec",
+            "secondary-container": "#0056a8",
+            "on-tertiary-container": "#3e2400",
+            "surface-container-low": "#1c1a23",
+            "error": "#ff5c7a",
+            "on-secondary-fixed": "#001b3c",
+            "long": "#2ee6a0",
+            "muted": "#6b687c",
+            "info": "#6fa8ff",
+            "on-background": "#e5e0ec",
+            "tertiary": "#ffb962",
+            "on-secondary": "#003062",
+            "on-primary-fixed": "#1a0063"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "gutter": "16px",
+            "space-lg": "24px",
+            "margin": "16px",
+            "space-xs": "4px",
+            "space-sm": "8px",
+            "space-md": "16px",
+            "space-xl": "40px"
+          },
+          "fontFamily": {
+            "display": ["Inter", "sans-serif"],
+            "title": ["Inter", "sans-serif"],
+            "data-lg": ["JetBrains Mono", "monospace"],
+            "body": ["Inter", "sans-serif"],
+            "label-caps": ["Inter", "sans-serif"],
+            "data": ["JetBrains Mono", "monospace"]
+          },
+          "fontSize": {
+            "display": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "title": ["17px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "data-lg": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+            "body": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "600" }],
+            "data": ["14px", { "lineHeight": "20px", "fontWeight": "500" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col font-body antialiased selection:bg-primary-container selection:text-primary">
+<!-- 1. Top App Bar Fija (Shared Component Exact Implementation) -->
+<header class="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-margin h-14 bg-surface border-b border-outline">
+<!-- Izquierda: Wordmark e icono -->
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-[20px]">terminal</span>
+<span class="font-title text-title font-bold text-on-surface tracking-tight">OmniAgent X</span>
+</div>
+<!-- Derecha: Red y Cuenta -->
+<div class="flex items-center space-x-2">
+<div class="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-surface-container-lowest border border-outline">
+<span class="w-1.5 h-1.5 rounded-full bg-long animate-pulse"></span>
+<span class="font-label-caps text-[10px] uppercase text-on-surface-variant tracking-wider">Monad testnet</span>
+</div>
+<div class="flex items-center px-2 py-0.5 rounded bg-surface-raised border border-outline">
+<span class="font-data text-[12px] text-muted">0xC9aC…2E4E</span>
+</div>
+</div>
+</header>
+<!-- Contenedor Principal Móvil (375px baseline) -->
+<main class="w-full max-w-[420px] mx-auto pt-18 pb-24 px-margin flex flex-col space-y-4 flex-1 mt-14">
+<!-- 2. Header de Sección -->
+<div class="flex flex-col space-y-1">
+<h1 class="font-display text-display text-on-surface tracking-tight">Estrategia</h1>
+<p class="font-body text-[13px] leading-snug text-[#9a97ab]">
+        Describe tu objetivo. El agente propone, las reglas deciden, tú apruebas.
+      </p>
+</div>
+<!-- 3. Panel de Instrucción (Intent Form Panel) -->
+<section class="bg-surface border border-outline rounded-xl p-space-md flex flex-col space-y-3.5">
+<!-- Input multilínea -->
+<div class="flex flex-col space-y-1.5">
+<label class="font-label-caps text-label-caps uppercase text-muted tracking-widest">
+          TU INSTRUCCIÓN
+        </label>
+<div class="bg-surface-raised border border-outline focus-within:border-primary rounded-lg p-2.5 transition-colors duration-150">
+<textarea class="w-full bg-transparent border-0 p-0 text-on-surface font-body text-[14px] focus:ring-0 resize-none placeholder-muted" readonly="" rows="2">Corto pequeño en ETH, bajo riesgo</textarea>
+</div>
+</div>
+<!-- Presupuesto de Margen -->
+<div class="flex flex-col space-y-1.5">
+<label class="font-label-caps text-label-caps uppercase text-muted tracking-widest">
+          PRESUPUESTO DE MARGEN
+        </label>
+<div class="flex items-center justify-between bg-surface-raised border border-outline focus-within:border-primary rounded-lg px-3 py-2 transition-colors duration-150">
+<input class="bg-transparent border-0 p-0 font-data text-data text-on-surface focus:ring-0 w-24" readonly="" type="text" value="5"/>
+<span class="font-data text-[12px] text-muted uppercase">USD</span>
+</div>
+<p class="font-body text-[11px] text-muted">
+          Disponible en el exchange: <span class="font-data text-on-surface-variant">100.00 AUSD</span>
+</p>
+</div>
+<!-- Botón Primario Full-width -->
+<button class="w-full py-2.5 px-4 rounded-lg bg-surface-raised border border-outline text-muted font-title text-[14px] flex items-center justify-center space-x-2 transition-colors duration-150 cursor-default">
+<span class="material-symbols-outlined text-[16px]">sync</span>
+<span>Plan generado</span>
+</button>
+</section>
+<!-- 4. Panel de Plan Propuesto -->
+<section class="bg-surface border border-outline rounded-xl p-space-md flex flex-col space-y-3.5 relative overflow-hidden">
+<!-- Encabezado del Panel -->
+<div class="flex items-center justify-between">
+<h2 class="font-title text-[15px] text-on-surface flex items-center space-x-2">
+<span>Plan propuesto</span>
+</h2>
+<span class="font-label-caps text-[10px] tracking-wider uppercase px-2 py-0.5 rounded bg-primary-container text-primary border border-outline">
+          EVALUADO
+        </span>
+</div>
+<!-- Fila de Orden Principal -->
+<div class="bg-surface-raised border border-outline rounded-lg p-2.5 flex items-center justify-between">
+<div class="flex items-center space-x-2">
+<span class="px-1.5 py-0.5 rounded bg-[#3b1219] text-short border border-[#6b1c2b] font-label-caps text-[10px] font-bold tracking-wider">
+            CORTO
+          </span>
+<span class="font-data text-data font-bold text-on-surface">ETH-PERP</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-data text-[12px] text-on-surface">5.00 USD <span class="text-muted">nocional</span></span>
+<span class="font-data text-[11px] text-muted">1x · margen 5.00 USD</span>
+</div>
+</div>
+<!-- Resumen Descriptivo -->
+<p class="font-body text-[13px] leading-relaxed text-on-surface-variant">
+        Apertura de posición corta en ETH-PERP con apalancamiento 1x y colateral de 5 USD.
+      </p>
+<!-- Nota de Riesgo Atenuada -->
+<p class="font-body text-[11px] leading-normal text-muted">
+        Riesgo máximo parametrizado: Pérdida limitada por stop loss determinista y reglas on-chain.
+      </p>
+<!-- Barra de Veredicto de Riesgo -->
+<div class="flex items-center space-x-2 px-3 py-2 rounded-lg bg-[#0e291e] border border-[#1b543c] text-long">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+<span class="font-title text-[13px] font-semibold tracking-wide">Riesgo aprobado</span>
+</div>
+<!-- Barra de Progreso de Margen -->
+<div class="flex flex-col space-y-1.5">
+<div class="flex justify-between items-center text-[11px]">
+<span class="font-label-caps uppercase text-muted tracking-wider">UTILIZACIÓN DE MARGEN</span>
+<span class="font-data text-on-surface-variant">5.00 / 5.00 USD</span>
+</div>
+<div class="w-full h-1 bg-surface-raised rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full w-full"></div>
+</div>
+</div>
+<!-- Telemetría en Mono Atenuada -->
+<div class="flex items-center justify-between pt-1">
+<span class="font-data text-[11px] text-muted">planner deepseek-flash 1.8 s · parser 0.9 s</span>
+</div>
+<!-- Botón de Aprobación con Passkey -->
+<button class="w-full py-2.5 px-4 rounded-xl bg-primary hover:bg-[#725cf7] active:scale-[0.98] transition-all duration-150 text-on-primary font-title text-[14px] font-semibold flex items-center justify-center space-x-2 shadow-none border-0 cursor-pointer">
+<span class="material-symbols-outlined text-[18px]">fingerprint</span>
+<span>Aprobar con passkey y enviar al agente</span>
+</button>
+</section>
+<!-- 5. Panel de Resultado del Agente -->
+<section class="bg-surface border border-outline rounded-xl p-space-md flex flex-col space-y-3">
+<!-- Encabezado con Badges -->
+<div class="flex items-center justify-between">
+<h2 class="font-title text-[15px] text-on-surface">Resultado del agente</h2>
+<div class="flex items-center space-x-1.5">
+<span class="px-2 py-0.5 rounded bg-[#2e1f0b] border border-[#5c3e16] text-warning font-label-caps text-[10px] tracking-wider uppercase font-semibold">
+            SIMULACIÓN
+          </span>
+<div class="flex items-center space-x-1 px-2 py-0.5 rounded bg-[#0e291e] border border-[#1b543c] text-long">
+<span class="material-symbols-outlined text-[12px]">check</span>
+<span class="font-label-caps text-[10px] tracking-wider uppercase font-semibold">Orden construida</span>
+</div>
+</div>
+</div>
+<!-- Lista Clave-Valor Telemetría -->
+<div class="divide-y divide-outline border-t border-b border-outline">
+<div class="flex items-center justify-between py-2">
+<span class="font-body text-[13px] text-muted">Simulación on-chain</span>
+<span class="font-data text-data font-bold text-long">OK</span>
+</div>
+<div class="flex items-center justify-between py-2">
+<span class="font-body text-[13px] text-muted">Order ID simulado</span>
+<span class="font-data text-data text-on-surface">0</span>
+</div>
+<div class="flex items-center justify-between py-2">
+<span class="font-body text-[13px] text-muted">Mercado</span>
+<span class="font-data text-data text-on-surface font-semibold">ETH-PERP</span>
+</div>
+<div class="flex items-center justify-between py-2">
+<span class="font-body text-[13px] text-muted">Precio límite</span>
+<span class="font-data text-data text-on-surface">2,431.78</span>
+</div>
+</div>
+<!-- Nota Atenuada Informativa -->
+<p class="font-body text-[11px] text-muted">
+        Modo simulación: nada se envió a la red.
+      </p>
+<!-- Botón Secundario Hairline -->
+<button class="w-full py-2 px-3 rounded-lg bg-transparent border border-outline hover:bg-surface-raised active:scale-[0.98] transition-colors duration-150 text-on-surface font-body text-[13px] flex items-center justify-center space-x-1.5">
+<span class="material-symbols-outlined text-[16px] text-muted">shield</span>
+<span>Ver decisiones en Riesgo</span>
+</button>
+</section>
+</main>
+<!-- 6. Barra de Navegación Inferior (BottomNavBar - Shared Component Exact Execution) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-gutter bg-surface border-t border-outline pb-safe">
+<!-- Pestaña 1: Cuenta -->
+<a class="flex flex-col items-center justify-center text-muted px-3 py-1 transition-colors duration-150 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-[20px]">account_balance_wallet</span>
+<span class="font-label-caps text-label-caps mt-1">Cuenta</span>
+</a>
+<!-- Pestaña 2: Estrategia (ACTIVA con fondo primary-container y texto primary) -->
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container rounded-xl px-3 py-1 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">query_stats</span>
+<span class="font-label-caps text-label-caps mt-1">Estrategia</span>
+</a>
+<!-- Pestaña 3: Riesgo -->
+<a class="flex flex-col items-center justify-center text-muted px-3 py-1 transition-colors duration-150 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-[20px]">flip_camera_ios</span>
+<span class="font-label-caps text-label-caps mt-1">Riesgo</span>
+</a>
+<!-- Pestaña 4: Guardián -->
+<a class="flex flex-col items-center justify-center text-muted px-3 py-1 transition-colors duration-150 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined text-[20px]">verified_user</span>
+<span class="font-label-caps text-label-caps mt-1">Guardián</span>
+</a>
+</nav>
+</body></html>

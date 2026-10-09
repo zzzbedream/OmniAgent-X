@@ -15,7 +15,13 @@ import {
   http,
 } from "viem";
 import { monadTestnet } from "viem/chains";
-import { type MeraEvmAccount, createMeraAccount, signInMeraAccount, toViem } from "~~/lib/mera/account";
+import {
+  type MeraEvmAccount,
+  confirmMeraAccount,
+  createMeraAccount,
+  signInMeraAccount,
+  toViem,
+} from "~~/lib/mera/account";
 
 const RPC_URL = process.env.NEXT_PUBLIC_MONAD_TESTNET_RPC || undefined;
 
@@ -28,6 +34,11 @@ type MeraContextValue = {
   error?: string;
   create: (userName: string) => Promise<void>;
   signIn: () => Promise<void>;
+  /**
+   * Biometric confirmation for one user action (approve a plan, close, deposit, withdraw…). Throws a readable
+   * error when cancelled or when another passkey answers. Call it once per action, right before signing.
+   */
+  confirm: () => Promise<void>;
   end: () => void;
 };
 
@@ -86,6 +97,14 @@ export function MeraProvider({ children }: { children: React.ReactNode }) {
     error,
     create: userName => run(() => createMeraAccount(userName)),
     signIn: () => run(signInMeraAccount),
+    confirm: async () => {
+      if (!account) throw new Error("inicia sesión con tu passkey primero");
+      try {
+        await confirmMeraAccount(account);
+      } catch (e) {
+        throw new Error(`Confirmación con passkey fallida: ${describeMeraError(e)}`);
+      }
+    },
     end,
   };
   return <MeraContext.Provider value={value}>{children}</MeraContext.Provider>;
