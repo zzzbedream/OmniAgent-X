@@ -158,7 +158,8 @@ Any experiment uses a fresh burner wallet. Wallet approvals on testnet are still
   - The guardian differs by acting on liquidation distance, drawdown and leverage, with graduated responses.
 - **Agora AUSD faucet** `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` (docs.agora.finance contract deployments):
   - Has code and holds about 999M AUSD.
-  - `eth_call requestFunds(address)` does not revert, but that selector is not among the PUSH4 values in its bytecode. **UNVERIFIED** whether a transaction sends funds.
+  - It is an EIP-1967 transparent proxy; implementation `0xba804df5c476e8eaef87bf8085f295300cce2a49` has `requestFunds(address)` `0x544c7cf9` and `token()` = AUSD.
+  - **Verified 2026-10-08:** a `requestFunds(owner)` transaction sent 10,000 AUSD (tx `0x3ff12d42d1f27192bbd78fa9587fb21a5afafa4c0862bd72f5ed1a691603af0e`). Cooldown and limits unknown.
 - **`Exchange.increasePositionCollateral(uint256,uint256)`** has selector `0xf769f0d3`, the one in the current operator allowlist.
   - The parameter order (perpId, amountCNS) is **UNVERIFIED**, so guardian top-ups stay off (`GUARDIAN_ADD_COLLATERAL=false`) until spike S2-bis.
 - **ERC-8004 on Monad testnet** (repo `erc-8004/erc-8004-contracts`, testnet address set):
@@ -176,3 +177,56 @@ Any experiment uses a fresh burner wallet. Wallet approvals on testnet are still
 - **Windows dev machine:**
   - `envio@3.12.1` ships Linux and macOS binaries only, so indexer codegen and tests need Linux.
   - Under memory pressure, `tsc`/vitest/lint can fail with `VirtualAlloc failed`. That is an environment failure, not a code failure.
+
+## Verified 2026-10-08: spike S2 on Monad testnet (run from the team VPS)
+- `perpl-s2.mts --write` with a burner owner and the worker's operator `0xA900773d87C3769074a238E9b572588559D2DA46`:
+  - Factory `create` with the operator's EIP-712 `AssignOperator` signature works. DelegatedAccount `0xcE547926d157A17E9da942cAbD6f72bFA4d636cb`.
+  - Transfer 100 AUSD + `createAccount(100 AUSD)` gives exchange `accountId` 1001.
+  - The factory still mints the stale allowlist. The sync granted `0x4d8dc985`, `0x39435dac`, `0x171a5b81`, `0xbbac6c95` and revoked the five stale selectors.
+- `perpl-s2.mts --test-order`: the operator called `execOrder` through the DelegatedAccount. Post-only OpenLong (on-chain enum 0), BTC perp 16, 10 lots, 1x.
+  - Simulation returned `orderId` 145; tx `0x64b7f7c3fbcf39864278e6868c9b10a3d82150c7163fb2db009781433b8298d0` succeeded.
+  - BTC at that moment: `priceDecimals` 1, `lotDecimals` 5, `status` 4.
+  - **This validates the `OrderDesc` encoding**, the gate for `EXECUTION_ENABLED=true`. Fills, closes and IOC semantics are still unverified.
+
+## Verified 2026-10-08: `maxNegPnlCollatBPS` blocks crossing orders (eth_call probes, nothing sent)
+Probed with `eth_call` from the worker operator through DelegatedAccount `0x98A4…8713`, which held 100 AUSD.
+- With `maxNegPnlCollatBPS = 0`, every order that would cross the book reverts with custom error `0xb29d1949`.
+  - This held for IOC, FOK and GTC orders, any `maxMatches`, and any `amountCNS`.
+  - Orders that do not cross pass: an IOC at mark below the best ask returns `orderId` 0, and a post-only bid returns an orderId.
+  - The selector is not in the openchain or 4byte databases.
+- The same orders pass with a larger cap. For a 5 USD, 1x IOC at mark ± 0.5%:
+  - 1 bps: only BTC passes both sides.
+  - 10 bps: everything passes except MON long.
+  - 50 bps and up: all four markets pass.
+- **Inference (UNVERIFIED against Perpl docs):** the field caps the negative PnL the order may cause, in bps of the position's collateral.
+- Fix in `core/src/perpl/orders.ts`:
+  - Opens use `slippageBps × leverage + 50`.
+  - Closes use 10000, so a losing position can always be closed.
+  - Re-probed: 48/48 combinations pass (4 markets × long/short × 5/25/60 USD × 1x/3x).
+- Before the fix, the worker's dry-run only built orders and could not have caught this. The dry-run now simulates every built order with `eth_call`.
+
+## Verified 2026-10-09: Perpl market-data WebSocket rejects foreign browser Origins
+- `wss://testnet.perpl.xyz/ws/v1/market-data` upgrade responses by request `Origin`:
+
+  | Origin | Response |
+  |---|---|
+  | none | 101 |
+  | `https://testnet.perpl.xyz` | 101 |
+  | our PWA domain | 403 |
+  | `http://localhost:3000` | 403 |
+  | `https://app.perpl.xyz` | 403 |
+
+- A browser always sends `Origin`, so the PWA cannot open the socket directly. The 2026-09 dashboard check used a mocked WS, so this had never been exercised live.
+- Workaround in production: the PWA's Caddy site relays `/perpl-ws/*` to Perpl with the `Origin` header removed. The PWA is built with `NEXT_PUBLIC_PERPL_WS_URL` pointing at the relay. Through the relay, our origin gets 101.
+- Every viewer's socket now reaches Perpl from the VPS IP. The documented limits are per connection (16 subscriptions, 10 requests/min); a per-IP limit is **UNVERIFIED**.
+
+## Verified 2026-10-09: live open and close through the production PWA and worker
+Burner DelegatedAccount `0xcE54…36cb`, accountId 1001, `EXECUTION_ENABLED=true`, slippage 50 bps.
+- **Plan.** `/api/strategy` (DeepSeek) proposed a short of 5 USD on ETH at 1.5x. The rules approved it.
+- **Open.** The IOC OpenShort **filled**. Tx `0x57e81f14d87111fb0db286ee42ad6d8498a99323faf040372d9b91121b66e5bb`.
+  - `getPosition`: 2 lots (0.002 ETH), entry 2,481.95, deposit 3.309507 AUSD (= notional / 1.5).
+  - Free balance went from 99.9 to 96.58878.
+- **Close.** `POST /close` signed by the owner sent an IOC CloseShort. Tx `0x7fdc3b05a486efed1ba6bf2cec8bedfee92a4d92b519d398bf022f25bc149eee`.
+  - The side came from the worker's own log (`sideSource: worker-log`).
+  - Afterwards the position had 0 lots and the balance was 99.896354, about 0.0036 AUSD of fees and spread for the round trip.
+- **Observation, not a rule:** this short position reported `positionType` 1. The on-chain `PositionEnum` is still undocumented, so the code keeps refusing to infer a side from it.

@@ -1,13 +1,13 @@
 # Status
 
-Last update: 2026-09-26. Network: Monad testnet (10143). "Verified" means it ran here. The build environment blocks Monad RPC, Perpl and LLM hosts, so nothing below has touched the real network yet.
+Last update: 2026-10-08. Network: Monad testnet (10143). "Verified" means it ran here. Until 2026-09-26 the build environment blocked Monad RPC, Perpl and LLM hosts; read-only checks from a real machine since then are in `VERIFIED_FACTS.md`. S2 sent the first transactions on 2026-10-08.
 
 ## Phase 0: spikes
 
 | Spike | Code | Verified here | Pending (your machine) |
 |---|---|---|---|
-| S1 Mera | `/spike/mera` | build, types | Real passkey on iOS 18+ or Android with GPM |
-| S2 Perpl | `scripts/spikes/perpl-s2.mts` (read-only, `--write`, `--test-order`) | types; fails only on the network (403) | Testnet collateral + MON; `--test-order` validates the `OrderDesc` encoding |
+| S1 Mera | `/spike/mera` | build, types. **2026-10-08: real passkey on the user's phone** at the VPS PWA. Full `/onboard` on testnet: DelegatedAccount `0x98A4…8713` (accountId 1004), worker as operator, allowlist synced (7 granted, 5 stale revoked), deposit 100 AUSD and owner withdraw. All checked on-chain | Device model not recorded |
+| S2 Perpl | `scripts/spikes/perpl-s2.mts` (read-only, `--write`, `--test-order`) | **Passed 2026-10-08** on testnet: account created, operator allowlist synced, operator `execOrder` accepted (orderId 145). See VERIFIED_FACTS | Fills, closes and IOC on testnet |
 | S3 CRE | `OmniReceiverSpike` + `cre/spike-workflow` | 6 forge tests; WASM compiles | CRE Forwarder on monad-testnet, `cre workflow simulate` |
 | S4 LLM | `scripts/spikes/llm-s4.mts` | types | Kimi/Qwen API keys (paid, no credits) |
 
@@ -31,10 +31,27 @@ yarn start                                                           # PWA on :3
 ```
 
 ### Known gaps (not done, on purpose or blocked)
-- **Execution is dry-run until S2 `--test-order` passes.** Only then set `EXECUTION_ENABLED=true`.
+- **Order cap fix (2026-10-08):** `maxNegPnlCollatBPS` was 0, so every crossing order would have reverted. The builder now sets a cap (see VERIFIED_FACTS), and the dry-run simulates each order on-chain.
+- **Automated live E2E (2026-10-09): 11/11.** A new user in headless Chromium with a virtual passkey (`scripts/qa/live-e2e.mjs`, DEMO.md) completed onboarding, a live open, the position view, a close and a withdraw.
+  - An earlier run stopped on a test bug after the open. It left an orphan 0.002 ETH short on account `0x5E09…E330`; its virtual passkey is gone, so nobody can close it. The script now always runs close and withdraw.
+- **Execution is live since 2026-10-09** (`EXECUTION_ENABLED=true` on the VPS worker). The full open → read → close cycle was verified on testnet (VERIFIED_FACTS). Collateral top-ups stay off (`GUARDIAN_ADD_COLLATERAL=false`). Mandates signed in dry-run do not run live until re-activated.
 - **Close orders** exist (worker `POST /close`, dashboard button, owner-signed `ClosePosition`). The side comes from the worker's own log of orders it sent (verified enum), or from the indexer calibration. Unknown → rejected, never guessed. Close/IOC semantics are unverified on testnet.
 - `/operator/consent` requires an owner-signed `ConsentRequest`. POST routes are rate-limited per IP (in memory, per process). One execution runs at a time per account.
 - Deployment: the worker Dockerfile is verified (build, run, healthy, non-root). Vercel for the PWA is unverified. See `docs/DEPLOY.md` and `docs/DEMO.md`.
+  - 2026-10-08: worker `093d169` runs on the team VPS (Docker, `127.0.0.1:8788` behind Caddy) at `https://omniagent.147-93-178-184.sslip.io`, **dry-run**. Verified: `/health` over HTTPS and CORS preflight for `http://localhost:3000`.
+  - 2026-10-08: the PWA runs on the same VPS (`packages/nextjs/Dockerfile`, `127.0.0.1:3100`) at `https://omniagent-app.147-93-178-184.sslip.io`. That hostname is the passkey `rpId`, so keep it. Verified over HTTPS: `/`, `/onboard`, `/intent`, `/dashboard`, `/guardian` and the agent card return 200. `/api/strategy` has the LLM configured and rejects unsigned requests with 401. Passkeys on a real device are still pending.
+  - 2026-10-09: the redesigned front is live ("OmniAgent Terminal" design system, `packages/nextjs/.stitch/DESIGN.md`).
+    - The landing page replaces the Scaffold-ETH home.
+    - `/intent` shows the decision pipeline, the order ticket, the rules checklist and a readable agent result.
+    - The dashboard takes a position's side from the worker's decision log when there is no indexer.
+    - Checked live in headless Chromium at 375px: the landing reads marks on-chain, and `/intent` reaches the worker (CORS).
+    - Perpl's WS needed a server-side relay (VERIFIED_FACTS).
+  - 2026-10-09: a second tester's brand-new passkey address had 0 MON and could not create its trading account.
+    - Every onboarding transaction must come from the owner (Perpl's factory and DelegatedAccount), so no relayer can pay for it.
+    - Fix: the worker's gas station (`POST /onboard/fund`, owner-signed `FundRequest`) sends 0.5 MON and asks Agora's faucet for AUSD on the owner's behalf. Limits: once per address, a daily cap, and the per-IP rate limit.
+    - `/onboard` calls it automatically when it sees an empty balance.
+    - Actions that move funds now ask for the fingerprint or Face ID again (Mera PRF with user verification), and the passkey must derive the same address.
+    - **Verified 2026-10-09 with an external tester on an iPhone.** The new passkey address `0x1411…e468` was funded automatically (0.5 MON + 10,000 AUSD, 19:50 UTC), then completed onboarding on its own: DelegatedAccount `0x9C48…9bcF`, accountId 1035, allowlist synced, 100 AUSD deposited. That took 12 transactions and about 0.185 MON.
 - The daily LLM cap is per process and in memory.
 - The vault + CRE (Phase 2) has not started.
 

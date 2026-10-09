@@ -54,7 +54,7 @@ yarn indexer:dev             # needs Docker + ENVIO_API_TOKEN
 - **Position side is never guessed.** On-chain `PositionEnum` is undocumented. An unknown side means the close is rejected.
 - **The Perpl operator must be an EOA** (`ECDSA.recover` check). The operator cannot `withdrawCollateral`; only the owner can.
 - **Don't copy code from `PerplFoundation/delegated-account`** (BUSL-1.1). Call the deployed contracts through hand-written ABIs only. `packages/core/test/abi.test.ts` pins the selectors.
-- **Never hard-code the testnet collateral.** Read it via `Exchange.getExchangeInfo()`. On testnet it is "USD", not AUSD.
+- **Never hard-code the testnet collateral.** Read it via `Exchange.getExchangeInfo()`. On 2026-10-07 the testnet exchange reported Agora AUSD (`0xa9012a…`), not the "USD" token in api-docs; see VERIFIED_FACTS.
 - **Passkeys are bound to the domain (`rpId`).** Changing the domain changes every derived address.
 - **No secrets in git.** `OPERATOR_PK`, LLM keys and `ENVIO_API_TOKEN` live in `.env` files that are gitignored.
 
@@ -69,7 +69,7 @@ Suggested primary track: **Onchain Finance & Trading**. A sponsor bounty only co
 
 | Bounty | Fit with current code | Gap |
 |---|---|---|
-| Agora Onchain Trading ($10k) | Mera auth + collateral balance + Perpl trades: the product itself | Testnet collateral is "USD", not AUSD. Does a PWA count as a "mobile app"? |
+| Agora Onchain Trading ($10k) | Mera auth + collateral balance + Perpl trades: the product itself | Testnet collateral is AUSD (on-chain, 2026-10-07). Does a PWA count as a "mobile app"? |
 | Perpl Analytics / Risk Tool ($3k) | `/dashboard`, `core/src/risk/metrics.ts` | Needs live data |
 | Best use of Perpl's API ($5k) | `agent-worker` bot | Executes on-chain, not through the Ed25519 REST API |
 | Best Mera-Powered UX ($2.5k) | `/onboard` | RainbowKit is still the scaffold's wallet path |

@@ -6,7 +6,9 @@ Each step lists what must be true before moving on. It doubles as the video scri
 - The worker is deployed and `/health` returns `executionEnabled: true` (only after S2 `--test-order` passed).
 - The PWA is deployed on its final HTTPS domain.
 - The phone runs iOS 18+ Safari, or Android Chrome with Google Password Manager.
-- The owner address (shown after step 1) holds MON for gas and at least 10 of the testnet collateral token.
+- The worker's gas station is on (`/health` → `gasStation.enabled`) and holds MON. A new passkey address gets 0.5 MON and test AUSD automatically on `/onboard`.
+- Opening the exchange account needs at least 100 AUSD (testnet minimum, VERIFIED_FACTS).
+- On an iPhone, "Crear passkey" always creates a **new** passkey, which means a new address. Returning users press "Ya tengo passkey".
 
 ## Steps
 1. **Cuenta → Crear passkey.** One biometric prompt, then the address appears.
@@ -32,3 +34,12 @@ Each step lists what must be true before moving on. It doubles as the video scri
 - **Step 6 or 8 reverts:** copy the error from the result (the worker keeps it in `/decisions`). The usual suspects are
   oracle staleness, price bands, and minimum lot size (see VERIFIED_FACTS).
 - **`side … is unknown` on close:** the position was not opened by this worker and there is no indexer. Run the indexer.
+
+## Automated run (no phone)
+`packages/nextjs/scripts/qa/live-e2e.mjs` runs the same journey as a brand-new user, in headless Chromium with a CDP
+virtual authenticator that supports PRF, so Mera derives a real address. It runs against the live PWA, worker and testnet:
+passkey → gas station → trading account → allowlist → deposit → plan → live order → position → close → withdraw.
+It saves a screenshot per step and a 375px video, and checks the open and close transactions on-chain.
+
+First full pass, 2026-10-09: 11/11 steps. About 145 s end to end, of which 68 s was the 9 allowlist transactions on the
+public RPC; another run took 19 s for the same step. The round trip cost 0.01 AUSD.
