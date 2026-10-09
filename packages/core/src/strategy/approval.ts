@@ -61,3 +61,14 @@ export const CONSENT_REQUEST_TYPES = {
     { name: "deadline", type: "uint256" },
   ],
 } as const;
+
+/**
+ * The passkey owner asks the worker's testnet gas station for gas and test collateral. A separate type from
+ * ConsentRequest, so neither signature can stand in for the other.
+ */
+export const FUND_REQUEST_TYPES = {
+  FundRequest: [
+    { name: "owner", type: "address" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;

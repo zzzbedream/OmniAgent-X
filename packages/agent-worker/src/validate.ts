@@ -4,6 +4,7 @@ import {
   APPROVAL_DOMAIN,
   CLOSE_APPROVAL_TYPES,
   CONSENT_REQUEST_TYPES,
+  FUND_REQUEST_TYPES,
   type CloseApprovalMessage,
   GUARDIAN_MANDATE_TYPES,
   GUARDIAN_REVOKE_TYPES,
@@ -165,23 +166,38 @@ export const MARKET_BY_PERP = new Map<bigint, MarketSymbol>(
 
 const ConsentSchema = z.object({ owner: addr, deadline: uintString, signature: signature65 });
 
-/** The owner proves control of the address before the worker signs an operator consent for it. */
-export async function validateConsentRequest(body: unknown, opts: { chainId: number; nowSec: bigint }) {
+/** An {owner, deadline} request signed by the owner: proves control of the address, valid at most one hour. */
+async function validateOwnerRequest(
+  body: unknown,
+  opts: { chainId: number; nowSec: bigint },
+  kind: { label: string; types: typeof CONSENT_REQUEST_TYPES | typeof FUND_REQUEST_TYPES },
+) {
   const parsed = ConsentSchema.safeParse(body);
   if (!parsed.success) throw new ValidationError("malformed request", parsed.error.issues);
   const owner = getAddress(parsed.data.owner);
   const deadline = BigInt(parsed.data.deadline);
-  if (deadline <= opts.nowSec) throw new ValidationError("consent request expired");
-  if (deadline > opts.nowSec + 3600n) throw new ValidationError("consent request deadline too far in the future");
+  if (deadline <= opts.nowSec) throw new ValidationError(`${kind.label} expired`);
+  if (deadline > opts.nowSec + 3600n) throw new ValidationError(`${kind.label} deadline too far in the future`);
+  const primaryType = Object.keys(kind.types)[0] as keyof typeof kind.types;
   const signer = await recoverOr400({
     domain: APPROVAL_DOMAIN(opts.chainId),
-    types: CONSENT_REQUEST_TYPES,
-    primaryType: "ConsentRequest",
+    types: kind.types,
+    primaryType,
     message: { owner, deadline },
     signature: parsed.data.signature as Hex,
-  });
-  if (signer !== owner) throw new ValidationError("consent request is not signed by the owner");
+  } as Parameters<typeof recoverOr400>[0]);
+  if (signer !== owner) throw new ValidationError(`${kind.label} is not signed by the owner`);
   return owner;
+}
+
+/** The owner proves control of the address before the worker signs an operator consent for it. */
+export function validateConsentRequest(body: unknown, opts: { chainId: number; nowSec: bigint }) {
+  return validateOwnerRequest(body, opts, { label: "consent request", types: CONSENT_REQUEST_TYPES });
+}
+
+/** The owner proves control of the address before the gas station spends anything on it. */
+export function validateFundRequest(body: unknown, opts: { chainId: number; nowSec: bigint }) {
+  return validateOwnerRequest(body, opts, { label: "fund request", types: FUND_REQUEST_TYPES });
 }
 
 // ── Guardian mandates ───────────────────────────────────────────────────────

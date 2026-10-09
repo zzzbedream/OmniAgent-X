@@ -2,6 +2,7 @@ export * from "./perpl/abi";
 export * from "./perpl/allowlist";
 export * from "./perpl/network";
 export * from "./perpl/orders";
+export * from "./perpl/decisionSide";
 export * from "./perpl/reads";
 export * from "./strategy/schema";
 export * from "./strategy/risk";

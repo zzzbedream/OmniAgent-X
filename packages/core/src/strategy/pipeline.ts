@@ -21,7 +21,8 @@ Hard limits (a plan breaking any of them is rejected whole): markets ${policy.al
 leverage 1..${policy.maxLeverage}; at most ${policy.maxOrders} orders; one order per market;
 notional per order ${policy.minOrderNotionalUsd}..${policy.maxOrderNotionalUsd} USD;
 sum of notionalUsd/leverage <= budget. Keep part of the budget unallocated as a buffer.
-Use only the prices given; do not assume other data. An empty "orders" list is a valid answer if nothing fits.`;
+Use only the prices given; do not assume other data. An empty "orders" list is a valid answer if nothing fits.
+Write "summary" and "riskNotes" for the user, in the same language as userRequest (Spanish if the user wrote Spanish).`;
 }
 
 export type PlanOutcome = {

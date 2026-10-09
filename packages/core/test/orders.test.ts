@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  OPEN_NEG_PNL_BUFFER_BPS,
   OrderBuildError,
   OrderDescType,
   type PerpSnapshot,
@@ -61,6 +62,17 @@ describe("buildOpenIocOrder", () => {
     expect(short.pricePNS).toBe(995_000n);
     expect(short.orderType).toBe(OrderDescType.OpenShort);
   });
+  // maxNegPnlCollatBPS = 0 made every crossing order revert with 0xb29d1949 on testnet (2026-10-08).
+  it("lets a crossing open absorb the slippage it pays, scaled by leverage, plus a fee buffer", () => {
+    const at = (leverage: number, slippageBps: number) =>
+      buildOpenIocOrder({ market: "BTC", side: "long", notionalUsd: 100, leverage }, btc, {
+        slippageBps,
+        currentBlock: 1n,
+      }).maxNegPnlCollatBPS;
+    expect(at(1, 50)).toBe(50n + OPEN_NEG_PNL_BUFFER_BPS);
+    expect(at(2, 50)).toBe(100n + OPEN_NEG_PNL_BUFFER_BPS);
+    expect(at(1, 0)).toBe(OPEN_NEG_PNL_BUFFER_BPS);
+  });
   it("rejects leverage below 1x and absurd slippage", () => {
     const i = { market: "BTC" as const, side: "long" as const, notionalUsd: 100, leverage: 0.5 };
     expect(() => buildOpenIocOrder(i, btc, { slippageBps: 50, currentBlock: 1n })).toThrow(/leverage/);
@@ -95,6 +107,10 @@ describe("buildCloseIocOrder", () => {
     const cs = buildCloseIocOrder("short", "BTC", 250n, btc, { slippageBps: 50, currentBlock: 10n });
     expect(cs.orderType).toBe(OrderDescType.CloseShort);
     expect(cs.pricePNS).toBe(1_005_000n);
+  });
+  it("never blocks a close on its realised loss: the price limit is the protection", () => {
+    const cl = buildCloseIocOrder("long", "BTC", 250n, btc, { slippageBps: 50, currentBlock: 10n });
+    expect(cl.maxNegPnlCollatBPS).toBe(10_000n);
   });
   it("refuses an empty position or a missing mark", () => {
     expect(() => buildCloseIocOrder("long", "BTC", 0n, btc, { slippageBps: 50, currentBlock: 1n })).toThrow(/nothing/);

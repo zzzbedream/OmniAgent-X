@@ -1,4 +1,4 @@
-import type { Hex } from "viem";
+import { type Hex, parseEther } from "viem";
 
 export type WorkerConfig = {
   operatorPk: Hex;
@@ -20,7 +20,22 @@ export type WorkerConfig = {
   guardianAddCollateral: boolean;
   /** Perpl REST base, for the maintenance margins in /v1/pub/context. */
   perplApiUrl: string;
+  /** Testnet gas station for brand-new passkey addresses; undefined (no GAS_STATION_PK) turns it off. */
+  gasStation?: { pk: Hex; dripWei: bigint; dailyCap: number };
 };
+
+/** Parses GAS_STATION_* settings. The station key must differ from the operator's: separate roles, separate funds. */
+function loadGasStation(env: Record<string, string | undefined>, operatorPk: string): WorkerConfig["gasStation"] {
+  const pk = env.GAS_STATION_PK;
+  if (!pk) return undefined;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) throw new Error("GAS_STATION_PK must be a 0x-prefixed 32-byte hex private key");
+  if (pk.toLowerCase() === operatorPk.toLowerCase()) throw new Error("GAS_STATION_PK must not be the operator key");
+  const dripWei = parseEther(env.GAS_DRIP_MON ?? "0.5");
+  if (dripWei <= 0n || dripWei > parseEther("5")) throw new Error("GAS_DRIP_MON must be in (0, 5]");
+  const dailyCap = Number(env.GAS_DAILY_CAP ?? 40);
+  if (!Number.isInteger(dailyCap) || dailyCap < 1) throw new Error("GAS_DAILY_CAP must be a positive integer");
+  return { pk: pk as Hex, dripWei, dailyCap };
+}
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): WorkerConfig {
   const operatorPk = env.OPERATOR_PK;
@@ -52,5 +67,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     guardianIntervalMs,
     guardianAddCollateral: env.GUARDIAN_ADD_COLLATERAL === "true",
     perplApiUrl: env.PERPL_API_URL || "https://testnet.perpl.xyz/api",
+    gasStation: loadGasStation(env, operatorPk),
   };
 }

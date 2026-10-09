@@ -47,19 +47,20 @@ function advanceState(state: GuardianState, stateDay: string, action: GuardianAc
 type Side = "long" | "short";
 
 /** Reads a JSON file; a corrupt one is moved aside (not deleted) so the worker can still start. */
-function loadJson<T>(file: string, empty: T): T {
+export function loadJson<T>(file: string, empty: T): T {
   if (!existsSync(file)) return empty;
   try {
     return JSON.parse(readFileSync(file, "utf8")) as T;
   } catch (e) {
     const aside = `${file}.corrupt-${Date.now()}`;
     renameSync(file, aside);
-    console.error(`guardian: ${file} was unreadable (${(e as Error).message}); moved to ${aside}`);
+    console.error(`${file} was unreadable (${(e as Error).message}); moved to ${aside}`);
     return empty;
   }
 }
 
-function writeAtomic(file: string, value: unknown) {
+/** Writes JSON through a temp file + rename, so a crash never leaves a half-written file. */
+export function writeAtomic(file: string, value: unknown) {
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, JSON.stringify(value, jsonReplacer, 2));
   renameSync(tmp, file);

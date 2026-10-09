@@ -29,10 +29,13 @@ import type { ExecutionOutcome } from "./guardian";
 import { safeErrorMessage } from "./log";
 import { MARKET_BY_PERP, ValidationError, type ValidatedClose, type ValidatedPlan } from "./validate";
 
+/** Outcome of an eth_call of execOrder from the operator: what a live send would hit, without broadcasting. */
+export type Simulation = { ok: true; orderId: string } | { ok: false; error: string };
+
 export type ExecutionResult = {
   mode: "dry-run" | "live";
   status: "built" | "sent" | "partial" | "failed";
-  orders: { order: OrderDesc; calldata: Hex; txHash?: Hex; error?: string }[];
+  orders: { order: OrderDesc; calldata: Hex; txHash?: Hex; error?: string; simulation?: Simulation }[];
 };
 
 /** Owner, operator, exchange account and execOrder allowlist checks shared by opens and closes. */
@@ -86,7 +89,16 @@ export async function executePlan(args: {
       return { order, calldata };
     }),
   );
-  if (!live) return { mode: "dry-run", status: "built", orders: built };
+  if (!live) {
+    // Each order is simulated against current state, independently of the others in the plan.
+    const orders = await Promise.all(
+      built.map(async b => ({
+        ...b,
+        simulation: await simulateExecOrder(client, wallet.account.address, plan.message.account, b.order),
+      })),
+    );
+    return { mode: "dry-run", status: "built", orders };
+  }
 
   const results: ExecutionResult["orders"] = [];
   for (const b of built) {
@@ -114,6 +126,27 @@ async function confirmed(client: PublicClient, txHash: Hex): Promise<Hex> {
 }
 
 const RECEIPT_TIMEOUT_MS = 30_000;
+
+/** Dry-run check: the same simulateContract a live send runs first, from the operator through the DelegatedAccount. */
+export async function simulateExecOrder(
+  client: PublicClient,
+  operator: Address,
+  account: Address,
+  order: OrderDesc,
+): Promise<Simulation> {
+  try {
+    const { result } = await client.simulateContract({
+      account: operator,
+      address: account,
+      abi: exchangeAbi,
+      functionName: "execOrder",
+      args: [order],
+    });
+    return { ok: true, orderId: result.orderId.toString() };
+  } catch (e) {
+    return { ok: false, error: safeErrorMessage(e, 500) };
+  }
+}
 
 // Both senders target the DelegatedAccount, not the Exchange: its fallback forwards allow-listed selectors.
 async function sendExecOrder(client: PublicClient, wallet: OperatorWallet, account: Address, order: OrderDesc) {
@@ -173,6 +206,7 @@ export type CloseResult = {
   calldata: Hex;
   txHash?: Hex;
   error?: string;
+  simulation?: Simulation;
 };
 
 export async function executeClose(args: {
@@ -212,7 +246,10 @@ export async function executeClose(args: {
     currentBlock: await client.getBlockNumber(),
   });
   const calldata = encodeFunctionData({ abi: exchangeAbi, functionName: "execOrder", args: [order] });
-  if (!live) return { mode: "dry-run", status: "built", side, sideSource, order, calldata };
+  if (!live) {
+    const simulation = await simulateExecOrder(client, wallet.account.address, account, order);
+    return { mode: "dry-run", status: "built", side, sideSource, order, calldata, simulation };
+  }
 
   try {
     const txHash = await sendExecOrder(client, wallet, account, order);

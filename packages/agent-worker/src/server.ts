@@ -1,16 +1,31 @@
 import {
+  AGORA_AUSD_FAUCET_TESTNET,
   ASSIGN_OPERATOR_TYPES,
   FACTORY_EIP712_DOMAIN,
   PERPL_TESTNET,
+  PERPL_TESTNET_MIN_OPEN_AUSD,
+  ausdFaucetAbi,
   delegatedAccountFactoryAbi,
   describeMandate,
+  erc20Abi,
+  readCollateral,
 } from "@omniagent/core";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { createPublicClient, createWalletClient, getAddress, http, isAddress } from "viem";
+import {
+  type Address,
+  type Hex,
+  type PublicClient,
+  createPublicClient,
+  createWalletClient,
+  getAddress,
+  http,
+  isAddress,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
 import type { WorkerConfig } from "./config";
 import { checkAccountAccess, checkAccountOnChain, executeClose, executeGuardianAction, executePlan } from "./executor";
+import { GasStation } from "./gasStation";
 import { GuardianLoop, GuardianStore } from "./guardian";
 import { makePositionReader } from "./guardianChain";
 import { DecisionLog, jsonReplacer, safeErrorMessage } from "./log";
@@ -19,6 +34,7 @@ import {
   ValidationError,
   validateClose,
   validateConsentRequest,
+  validateFundRequest,
   validateMandateSubmission,
   validateRevoke,
   validateSubmission,
@@ -52,6 +68,60 @@ function clientKey(req: IncomingMessage, trustProxy: boolean): string {
 }
 
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
+
+const RECEIPT_TIMEOUT_MS = 30_000;
+
+/**
+ * Gas station wired to the chain. Its collateral threshold is the exchange's account-opening minimum in the
+ * collateral token read on-chain (never hard-coded), so the station is built on first use and retried on failure.
+ */
+function makeGasStation(gs: NonNullable<WorkerConfig["gasStation"]>, client: PublicClient, rpcUrl: string, dataDir: string) {
+  const account = privateKeyToAccount(gs.pk);
+  const wallet = createWalletClient({ account, chain: monadTestnet, transport: http(rpcUrl) });
+  const confirmed = async (hash: Hex) => {
+    const receipt = await client.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS });
+    if (receipt.status !== "success") throw new Error(`reverted in tx ${hash}`);
+    return hash;
+  };
+  let pending: Promise<GasStation> | undefined;
+  const build = async () => {
+    const collateral = await readCollateral(client);
+    const balanceOf = (a: Address) =>
+      client.readContract({ address: collateral.token, abi: erc20Abi, functionName: "balanceOf", args: [a] });
+    return new GasStation({
+      dataDir,
+      dripWei: gs.dripWei,
+      minBalanceWei: gs.dripWei / 5n,
+      minCollateral: BigInt(PERPL_TESTNET_MIN_OPEN_AUSD) * 10n ** BigInt(collateral.decimals),
+      dailyCap: gs.dailyCap,
+      deps: {
+        getMonBalance: a => client.getBalance({ address: a }),
+        getCollateralBalance: balanceOf,
+        sendMon: async (to, value) => confirmed(await wallet.sendTransaction({ to, value })),
+        requestCollateral: async to => {
+          const { request } = await client.simulateContract({
+            account,
+            address: AGORA_AUSD_FAUCET_TESTNET,
+            abi: ausdFaucetAbi,
+            functionName: "requestFunds",
+            args: [to],
+          });
+          return confirmed(await wallet.writeContract(request));
+        },
+      },
+    });
+  };
+  return {
+    address: account.address,
+    station: () => {
+      pending ??= build().catch(e => {
+        pending = undefined;
+        throw e;
+      });
+      return pending;
+    },
+  };
+}
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json" });
@@ -98,14 +168,29 @@ export function createWorker(cfg: WorkerConfig) {
     now: () => Math.floor(Date.now() / 1000),
   });
   const guardianInfo = { intervalMs: cfg.guardianIntervalMs, addCollateralEnabled: cfg.guardianAddCollateral };
+  const gasStation = cfg.gasStation ? makeGasStation(cfg.gasStation, client, cfg.rpcUrl, cfg.dataDir) : undefined;
 
   const routes: Record<string, (req: IncomingMessage, url: URL) => Promise<[number, unknown]>> = {
     "GET /health": async () => [
       200,
-      { ok: true, operator: operator.address, executionEnabled: cfg.executionEnabled, guardian: guardianInfo },
+      {
+        ok: true,
+        operator: operator.address,
+        executionEnabled: cfg.executionEnabled,
+        guardian: guardianInfo,
+        gasStation: gasStation ? { enabled: true, address: gasStation.address } : { enabled: false },
+      },
     ],
 
     "GET /operator": async () => [200, { operator: operator.address, chainId: PERPL_TESTNET.chainId }],
+
+    // Testnet gas + collateral for a brand-new passkey address, which cannot send its first transaction otherwise.
+    // The owner signs a FundRequest; the station funds each address once and stops at a daily cap.
+    "POST /onboard/fund": async req => {
+      if (!gasStation) return [503, { error: "gas station disabled" }];
+      const owner = await validateFundRequest(await readJson(req), { chainId: PERPL_TESTNET.chainId, nowSec: nowSec() });
+      return [200, await (await gasStation.station()).fund(owner)];
+    },
 
     // Operator consent (EIP-712 AssignOperator on the factory domain) so the owner can call factory.create.
     // The caller must prove it controls `owner` (ConsentRequest signature) before the operator signs anything.

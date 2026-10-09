@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LlmError, chatJson, extractJsonObject, llmRolesFromEnv } from "../src/strategy/llm";
-import { runPlanningPipeline } from "../src/strategy/pipeline";
+import { planSystem, runPlanningPipeline } from "../src/strategy/pipeline";
+import { DEFAULT_TESTNET_POLICY } from "../src/strategy/risk";
 import { IntentParamsSchema } from "../src/strategy/schema";
 
 const cfg = (name: string) => ({ name, baseUrl: "https://llm.test/v1", apiKey: "k", model: `${name}-model` });
@@ -110,6 +111,12 @@ describe("chatJson", () => {
     const { f, bodies } = sequenceFetch(["", "  "]);
     await expect(chatJson(cfg("parser"), IntentParamsSchema, "s", "u", f)).rejects.toThrow(/empty reply/);
     expect(bodies).toHaveLength(2);
+  });
+});
+
+describe("planSystem", () => {
+  it("asks for the user-facing text in the user's language (the demo UI is Spanish)", () => {
+    expect(planSystem(DEFAULT_TESTNET_POLICY)).toMatch(/same language as userRequest/);
   });
 });
 

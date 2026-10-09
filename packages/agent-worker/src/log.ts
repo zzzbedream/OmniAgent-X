@@ -1,6 +1,6 @@
 // Append-only JSONL decision log. It is the audit trail (what was asked, validated, sent) and the
 // source of used approval nonces after a restart.
-import { sideOfOpenOrderType } from "@omniagent/core";
+import { sideFromDecisionLog } from "@omniagent/core";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -85,20 +85,7 @@ export class DecisionLog {
    * mode reads dry-run entries so the close flow can be exercised without a chain.
    */
   sideForMarket(account: string, perpId: bigint, mode: "dry-run" | "live"): "long" | "short" | undefined {
-    for (const e of this.all().reverse()) {
-      if (e.account.toLowerCase() !== account.toLowerCase() || e.mode !== mode) continue;
-      if (e.kind === "close" && e.status === "sent" && (e.detail as { perpId?: string })?.perpId === perpId.toString()) {
-        return undefined; // closed after the last open
-      }
-      if (e.kind !== "plan" || !Array.isArray(e.detail)) continue;
-      for (const o of e.detail as { order?: { perpId?: string; orderType?: number }; txHash?: string }[]) {
-        if (o.order?.perpId !== perpId.toString()) continue;
-        if (mode === "live" && !o.txHash) continue;
-        const side = sideOfOpenOrderType(Number(o.order.orderType));
-        if (side) return side;
-      }
-    }
-    return undefined;
+    return sideFromDecisionLog(this.all().reverse(), account, perpId, mode);
   }
 
   private all(): DecisionEntry[] {

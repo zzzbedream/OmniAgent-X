@@ -63,6 +63,16 @@ export class OrderBuildError extends Error {}
 const BPS = 10_000n;
 const USD_MICRO = 1_000_000n;
 
+/**
+ * Fee and spread headroom for maxNegPnlCollatBPS on opens. On testnet (2026-10-08) every order that crossed the
+ * book reverted with 0xb29d1949 when the field was 0. eth_call probes passed in all four markets at 50 bps for a
+ * 5 USD, 1x order (MON needed more than 10). Reading the field as "negative PnL this order may cause, in bps of
+ * the position's collateral" is an inference, not documented.
+ */
+export const OPEN_NEG_PNL_BUFFER_BPS = 50n;
+/** Closes realise whatever loss the position has; their price limit is the protection, so they are never capped. */
+const CLOSE_NEG_PNL_BPS = BPS;
+
 function toMicroUsd(usd: number): bigint {
   if (!Number.isFinite(usd) || usd <= 0) throw new OrderBuildError(`invalid notional ${usd}`);
   return BigInt(Math.round(usd * 1_000_000));
@@ -109,7 +119,8 @@ export function buildOpenIocOrder(
     leverageHdths,
     lastExecutionBlock: 0n,
     amountCNS: 0n,
-    maxNegPnlCollatBPS: 0n,
+    // Crossing at mark ± s costs up to s·notional = s·leverage·collateral.
+    maxNegPnlCollatBPS: (slip * leverageHdths) / 100n + OPEN_NEG_PNL_BUFFER_BPS,
   };
 }
 
@@ -182,7 +193,7 @@ export function buildCloseIocOrder(
     leverageHdths: 100n,
     lastExecutionBlock: 0n,
     amountCNS: 0n,
-    maxNegPnlCollatBPS: 0n,
+    maxNegPnlCollatBPS: CLOSE_NEG_PNL_BPS,
   };
 }
 
