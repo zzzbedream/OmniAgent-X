@@ -163,7 +163,7 @@ try {
     // The side must be known (indexer or worker log) and shown as a status chip, never "Lado ?".
     await page.locator("section[aria-label='Positions'] :is(.chip-short, .chip-long)").first().waitFor({ timeout: 45_000 });
     // Sub-cent PnL must read 0.00, never "-0".
-    const summary = (await page.locator("section[aria-label='Resumen de la cuenta']").innerText()).replace(/\s+/g, " ");
+    const summary = (await page.locator("section[aria-label='Account summary']").innerText()).replace(/\s+/g, " ");
     const rowText = (await row.innerText()).replace(/\s+/g, " ");
     if (/-0(?![.,\d])/.test(summary) || /-0(?![.,\d])/.test(rowText)) throw new Error(`"-0" PnL shown: ${rowText.slice(0, 80)}`);
     return rowText.slice(0, 120);

@@ -24,7 +24,7 @@ Source of truth for what is verified and what is not: [`docs/STATUS.md`](docs/ST
 5. **Execution.** The worker simulates each order with `eth_call`, then sends an IOC `execOrder` through the DelegatedAccount.
 6. **Risk.**
    - The dashboard reads positions on-chain and shows live Perpl marks, estimated PnL and liquidation, and the agent's decision log.
-   - The **Guardian** is an owner-signed mandate: rules on distance to liquidation, such as "reduce 50% below 8%". It is checked every 5 seconds.
+   - The **Guardian** is an owner-signed mandate written in plain English, for example "below 15% distance to liquidation add 20 USD of collateral, below 8% reduce by half, below 4% close". The agent checks it every 5 seconds. It can add collateral, reduce or close, but never open positions or withdraw.
 
 ## Verified on Monad testnet
 
@@ -33,6 +33,7 @@ Source of truth for what is verified and what is not: [`docs/STATUS.md`](docs/ST
 | Operator `execOrder` through a DelegatedAccount (spike S2) | [tx](https://testnet.monadscan.com/tx/0x64b7f7c3fbcf39864278e6868c9b10a3d82150c7163fb2db009781433b8298d0) |
 | Live open and close through the production PWA and worker | [open](https://testnet.monadscan.com/tx/0x57e81f14d87111fb0db286ee42ad6d8498a99323faf040372d9b91121b66e5bb) · [close](https://testnet.monadscan.com/tx/0x7fdc3b05a486efed1ba6bf2cec8bedfee92a4d92b519d398bf022f25bc149eee) |
 | Automated new-user journey, 11/11 steps (virtual passkey, see below) | [open](https://testnet.monadscan.com/tx/0x9c15d2466106f4f79dceec31a2f02579b9c46fb80a307fb4c810ced38e9602be) · [close](https://testnet.monadscan.com/tx/0x40a0aed6a6816e31b24a96d5c2e872610ef17c59c7a8669b76b2ac2d1f7dfff6) |
+| Guardian collateral top-up through the operator (`increasePositionCollateral`) | [tx](https://testnet.monadscan.com/tx/0xfded79f1e7a4280431628f3bc36bf021be5a60209bc5582c9a958ddc3b696207) |
 | External tester on an iPhone: automatic funding and full onboarding | DelegatedAccount `0x9C487AF208853DF7de29640B09e606Bb538A9bcF` (exchange account 1035) |
 
 Measured on the live deployment (2026-10-09, public RPC):
@@ -49,12 +50,13 @@ Most of the full journey is nine allowlist transactions. On the public RPC they 
 
 You need an iPhone with iOS 18+ (Safari) or an Android phone with Chrome and Google Password Manager.
 
-1. **Cuenta.** Type a name and press **Crear passkey**. Wait for "Preparando tu cuenta" (test gas and AUSD arrive by themselves).
-2. Press **Crear cuenta de trading**, then **Reparar permisos**, then **Depositar y abrir** (100 AUSD minimum on testnet).
-3. **Estrategia.** Type e.g. "Corto pequeño en ETH, bajo riesgo" with a budget of 5, then **Generar plan** and **Aprobar con passkey**.
-4. **Riesgo.** See the position, then **Cerrar con passkey**. Back in **Cuenta**, press **Retirar**.
+1. **Account.** Type a name and press **Create passkey**. Test gas and AUSD arrive by themselves within a few seconds.
+2. Press **Create trading account**, then **Repair permissions**, then **Deposit and open** (100 AUSD minimum on testnet).
+3. **Strategy.** Type e.g. "Small ETH short, low risk" with a margin budget of 5, then **Generate plan** and **Approve with passkey**.
+4. **Risk.** See the position, then **Close with passkey**. Back in **Account**, press **Withdraw**.
+5. **Guardian (optional).** Before closing, pick the **Demo: instant top-up** preset, press **Translate rules** and **Activate with passkey**. The agent adds collateral to the open position on its own.
 
-After the first visit, use **Ya tengo passkey**. On iOS, "Crear passkey" always creates a new passkey, and with it a new address.
+After the first visit, use **I have a passkey**. On iOS, **Create passkey** always creates a new passkey, and with it a new address.
 
 ## Layout
 
