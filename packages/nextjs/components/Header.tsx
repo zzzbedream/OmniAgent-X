@@ -82,7 +82,7 @@ export const Header = () => {
               href="/onboard"
               className="num border border-line-strong px-3 py-1.5 text-[12px] uppercase tracking-[0.12em] text-bone hover:border-bone"
             >
-              Entrar
+              Sign in
             </Link>
           )}
           {SHOW_DEV_TOOLS && <RainbowKitCustomConnectButton />}

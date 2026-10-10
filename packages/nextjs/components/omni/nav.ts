@@ -11,9 +11,9 @@ export type NavItem = { label: string; href: string; Icon: ComponentType<SVGProp
 
 /** App sections, in the order of the demo flow. Shared by the header (desktop) and the tab bar (mobile). */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { label: "Inicio", href: "/", Icon: HomeIcon },
-  { label: "Cuenta", href: "/onboard", Icon: FingerPrintIcon },
-  { label: "Estrategia", href: "/intent", Icon: CommandLineIcon },
-  { label: "Riesgo", href: "/dashboard", Icon: ChartBarSquareIcon },
-  { label: "Guardián", href: "/guardian", Icon: ShieldCheckIcon },
+  { label: "Home", href: "/", Icon: HomeIcon },
+  { label: "Account", href: "/onboard", Icon: FingerPrintIcon },
+  { label: "Strategy", href: "/intent", Icon: CommandLineIcon },
+  { label: "Risk", href: "/dashboard", Icon: ChartBarSquareIcon },
+  { label: "Guardian", href: "/guardian", Icon: ShieldCheckIcon },
 ];

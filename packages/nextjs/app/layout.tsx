@@ -16,8 +16,7 @@ const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrai
 
 export const metadata = getMetadata({
   title: "OmniAgent X",
-  description:
-    "Copiloto de trading con IA en Monad testnet. La IA propone, las reglas deciden, tú firmas con tu passkey.",
+  description: "AI trading co-pilot on Monad testnet. The AI proposes, the rules decide, you sign with your passkey.",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {

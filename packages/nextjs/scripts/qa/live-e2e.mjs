@@ -129,7 +129,7 @@ try {
   });
 
   await step("Generar plan (DeepSeek + reglas)", async () => {
-    await tab("Estrategia").click();
+    await tab("Strategy").click();
     await page.getByRole("button", { name: "Generar plan" }).click();
     await page.getByText(/Riesgo aprobado|Plan rechazado/).first().waitFor({ timeout: 90_000 });
     if (await page.getByText("Plan rechazado por las reglas").count()) throw new Error("plan rejected by the rules");
@@ -157,7 +157,7 @@ try {
   });
 
   await step("Ver la posición en Riesgo", async () => {
-    await tab("Riesgo").click();
+    await tab("Risk").click();
     const row = page.locator("article", { hasText: "-PERP" }).first();
     await row.waitFor({ timeout: 60_000 });
     // The side must be known (indexer or worker log) and shown as a status chip, never "Lado ?".
@@ -180,7 +180,7 @@ try {
   });
 
   await step("Retirar a la wallet (confirmación + passkey)", async () => {
-    await tab("Cuenta").click();
+    await tab("Account").click();
     const hero = page.locator("text=En el exchange").locator("xpath=..");
     await hero.waitFor({ timeout: 30_000 });
     const bal = Number((await hero.innerText()).match(/([\d.]+)\s*AUSD/)?.[1] ?? "0");

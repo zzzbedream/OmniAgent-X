@@ -13,26 +13,30 @@ import { useMera } from "~~/services/mera/MeraProvider";
 const P = DEFAULT_TESTNET_POLICY;
 
 const PIPELINE = [
-  { title: "Instrucción", body: "Escribes tu objetivo y tu presupuesto en lenguaje normal.", tag: "texto libre" },
-  { title: "Plan IA", body: "Un modelo arma el plan. La salida debe pasar un esquema estricto.", tag: "LLM → zod" },
+  { title: "Intent", body: "You write your goal and your budget in plain language.", tag: "free text" },
+  { title: "AI plan", body: "A model drafts the plan. Its output must pass a strict schema.", tag: "LLM → zod" },
   {
-    title: "Reglas",
-    body: `Mercados permitidos, hasta ${P.maxLeverage}x, nocional y margen dentro del presupuesto. Una falla rechaza el plan entero.`,
+    title: "Rules",
+    body: `Allowed markets, up to ${P.maxLeverage}x, notional and margin within budget. One failure rejects the whole plan.`,
     tag: "RiskPolicy",
   },
-  { title: "Passkey", body: "Firmas el hash exacto del plan con Face ID o huella. Sin frase semilla.", tag: "EIP-712" },
   {
-    title: "Ejecución",
-    body: "El agente simula cada orden on-chain y recién entonces la envía a Perpl.",
+    title: "Passkey",
+    body: "You sign the exact plan hash with Face ID or a fingerprint. No seed phrase.",
+    tag: "EIP-712",
+  },
+  {
+    title: "Execution",
+    body: "The agent simulates every order on-chain and only then sends it to Perpl.",
     tag: "eth_call → IOC",
   },
 ] as const;
 
 const STEPS = [
-  { title: "Crea tu passkey", body: "Gas y AUSD de prueba llegan solos." },
-  { title: "Abre tu cuenta", body: "Cuenta delegada de Perpl: tú eres el dueño." },
-  { title: "Describe la estrategia", body: "La IA propone, las reglas deciden." },
-  { title: "Firma y vigila", body: "El guardián protege tu colateral." },
+  { title: "Create a passkey", body: "Test gas and AUSD arrive on their own." },
+  { title: "Open your account", body: "A Perpl delegated account. You are the owner." },
+  { title: "Describe the trade", body: "The AI proposes, the rules decide." },
+  { title: "Sign and watch", body: "The guardian protects your collateral." },
 ] as const;
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
@@ -50,44 +54,44 @@ const Home: NextPage = () => {
       {/* ── Hero ─────────────────────────────────────────── */}
       <section className="grid items-center gap-12 pb-16 pt-10 lg:min-h-[calc(100vh-72px)] lg:grid-cols-[1fr_1.05fr] lg:gap-8 lg:pt-0">
         <div className="flex flex-col gap-8">
-          <Eyebrow>Copiloto de trading · passkey · Monad</Eyebrow>
+          <Eyebrow>Trading co-pilot · passkey · Monad</Eyebrow>
           <h1 className="text-[56px] font-bold leading-[0.95] tracking-[-0.02em] sm:text-[84px] lg:text-[104px]">
-            Tu riesgo,
+            Your risk,
             <br />
-            en tus
+            in your
             <br />
-            palabras.
+            words.
           </h1>
           <p className="max-w-[440px] text-xl leading-snug text-ash">
-            La IA propone. Las reglas deciden. Tú firmas con tu passkey. Un agente ejecuta en Perpl y nunca puede
-            retirar tus fondos.
+            The AI proposes. The rules decide. You sign with your passkey. An agent executes on Perpl and can never
+            withdraw your funds.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href={account ? "/intent" : "/onboard"}
               className="num inline-flex h-12 items-center gap-3 bg-bone px-5 text-[13px] font-semibold uppercase tracking-[0.12em] text-void transition-opacity hover:opacity-85"
             >
-              {account ? "Ir a estrategia" : "Crear passkey"} <span aria-hidden>→</span>
+              {account ? "Go to strategy" : "Create passkey"} <span aria-hidden>→</span>
             </Link>
             <a
               href="#como"
               className="num inline-flex h-12 items-center gap-3 border border-line-strong px-5 text-[13px] uppercase tracking-[0.12em] text-ash transition-colors hover:border-bone hover:text-bone"
             >
-              Cómo funciona <span aria-hidden>↓</span>
+              How it works <span aria-hidden>↓</span>
             </a>
           </div>
           <dl className="num grid max-w-[480px] grid-cols-3 border-t border-line pt-5 text-[12px]">
             <div className="flex flex-col gap-1">
-              <dt className="uppercase tracking-[0.14em] text-smoke">Mercados</dt>
+              <dt className="uppercase tracking-[0.14em] text-smoke">Markets</dt>
               <dd className="text-bone">{P.allowedMarkets.join(" ")}</dd>
             </div>
             <div className="flex flex-col gap-1">
-              <dt className="uppercase tracking-[0.14em] text-smoke">Apalanc.</dt>
+              <dt className="uppercase tracking-[0.14em] text-smoke">Leverage</dt>
               <dd className="text-bone">≤ {P.maxLeverage}x</dd>
             </div>
             <div className="flex flex-col gap-1">
-              <dt className="uppercase tracking-[0.14em] text-smoke">Retiros</dt>
-              <dd className="text-long">solo tú</dd>
+              <dt className="uppercase tracking-[0.14em] text-smoke">Withdrawals</dt>
+              <dd className="text-long">you only</dd>
             </div>
           </dl>
         </div>
@@ -98,15 +102,14 @@ const Home: NextPage = () => {
       <section id="como" className="scroll-mt-20 border-t border-line py-20">
         <Reveal className="grid gap-12 lg:grid-cols-[1fr_1.6fr]">
           <div className="flex flex-col gap-5" data-reveal>
-            <Eyebrow>Cómo decide</Eyebrow>
+            <Eyebrow>How it decides</Eyebrow>
             <h2 className="text-[44px] font-bold leading-[1] tracking-[-0.01em] sm:text-[56px]">
-              La IA propone.
+              The AI proposes.
               <br />
-              El código decide.
+              The code decides.
             </h2>
             <p className="max-w-[360px] text-lg text-ash">
-              Nada de lo que escribe el modelo se ejecuta directo. Cada plan cruza cinco etapas, y cualquiera puede
-              detenerlo.
+              Nothing the model writes runs directly. Every plan crosses five stages, and any of them can stop it.
             </p>
           </div>
           <ol className="flex flex-col">
@@ -132,32 +135,32 @@ const Home: NextPage = () => {
       <section className="border-t border-line py-20">
         <Reveal className="grid gap-12 lg:grid-cols-[1fr_1.6fr]">
           <div className="flex flex-col gap-5" data-reveal>
-            <Eyebrow>Custodia</Eyebrow>
+            <Eyebrow>Custody</Eyebrow>
             <h2 className="text-[44px] font-bold leading-[1] tracking-[-0.01em] sm:text-[56px]">
-              El agente opera.
+              The agent trades.
               <br />
-              <span className="text-ash">Nunca retira.</span>
+              <span className="text-ash">It never withdraws.</span>
             </h2>
           </div>
           <div className="grid gap-px bg-line sm:grid-cols-2" data-reveal>
             <div className="flex flex-col gap-4 bg-void p-6 sm:pl-0">
-              <p className="num text-[12px] uppercase tracking-[0.16em] text-long">Puede</p>
+              <p className="num text-[12px] uppercase tracking-[0.16em] text-long">Can</p>
               <ul className="flex flex-col gap-3 text-lg">
-                <li>Abrir y cerrar posiciones</li>
-                <li>Solo en {P.allowedMarkets.join(" · ")}</li>
-                <li>Agregar colateral según tu mandato</li>
+                <li>Open and close positions</li>
+                <li>Only on {P.allowedMarkets.join(" · ")}</li>
+                <li>Add collateral under your mandate</li>
               </ul>
             </div>
             <div className="flex flex-col gap-4 bg-void p-6">
-              <p className="num text-[12px] uppercase tracking-[0.16em] text-short">No puede</p>
+              <p className="num text-[12px] uppercase tracking-[0.16em] text-short">Cannot</p>
               <ul className="flex flex-col gap-3 text-lg">
-                <li>Retirar fondos: solo tu passkey</li>
-                <li>Operar sin tu firma del plan exacto</li>
-                <li>Saltarse una regla</li>
+                <li>Withdraw funds: only your passkey can</li>
+                <li>Trade without your signature on the exact plan</li>
+                <li>Skip a rule</li>
               </ul>
             </div>
             <p className="num bg-void pt-4 text-[12px] leading-relaxed text-smoke sm:col-span-2">
-              Perpl DelegatedAccount · owner = tu passkey · operator = el agente · withdrawCollateral solo owner
+              Perpl DelegatedAccount · owner = your passkey · operator = the agent · withdrawCollateral is owner-only
             </p>
           </div>
         </Reveal>
@@ -172,12 +175,12 @@ const Home: NextPage = () => {
       <section className="border-t border-line py-20">
         <Reveal className="flex flex-col gap-10">
           <div className="flex flex-wrap items-end justify-between gap-6" data-reveal>
-            <h2 className="text-[44px] font-bold leading-[1] tracking-[-0.01em] sm:text-[56px]">Cuatro pasos.</h2>
+            <h2 className="text-[44px] font-bold leading-[1] tracking-[-0.01em] sm:text-[56px]">Four steps.</h2>
             <Link
               href={account ? "/intent" : "/onboard"}
               className="num inline-flex h-12 items-center gap-3 bg-bone px-5 text-[13px] font-semibold uppercase tracking-[0.12em] text-void hover:opacity-85"
             >
-              Empezar <span aria-hidden>→</span>
+              Get started <span aria-hidden>→</span>
             </Link>
           </div>
           <ol className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-4">

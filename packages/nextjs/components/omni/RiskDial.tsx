@@ -31,17 +31,17 @@ const arc = (r: number, a0: number, a1: number) => {
   return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
 };
 const colorOf = (v: number) => (v < 8 ? "#ff5a4f" : v < 15 ? "#f5a524" : v < 30 ? "#e4d348" : "#3ddc97");
-const stateOf = (v: number) => (v < 8 ? "RIESGO ALTO" : v < 15 ? "GUARDIÁN ACTÚA" : "EN RANGO");
+const stateOf = (v: number) => (v < 8 ? "HIGH RISK" : v < 15 ? "GUARDIAN ACTS" : "IN RANGE");
 
 const TICKS = Array.from({ length: 121 }, (_, i) => (i / 120) * MAX);
 
 type LogLine = { id: number; t: string; text: string; tone: "ash" | "amber" | "long" };
 
 const SCRIPT: { at: number; text: string; tone: LogLine["tone"] }[] = [
-  { at: 43.2, text: "CORTO ETH-PERP · 2x · colchón 43.2%", tone: "ash" },
-  { at: 12.4, text: "mark +6.1% en contra · colchón 12.4% < 15%", tone: "amber" },
-  { at: 12.4, text: "guardián: +20 AUSD de colateral · firmado por tu mandato", tone: "long" },
-  { at: 31.0, text: "tx confirmada · colchón 31.0%", tone: "long" },
+  { at: 43.2, text: "SHORT ETH-PERP · 2x · buffer 43.2%", tone: "ash" },
+  { at: 12.4, text: "mark +6.1% against · buffer 12.4% < 15%", tone: "amber" },
+  { at: 12.4, text: "guardian: +20 AUSD collateral · signed by your mandate", tone: "long" },
+  { at: 31.0, text: "tx confirmed · buffer 31.0%", tone: "long" },
 ];
 
 export const RiskDial = () => {
@@ -70,7 +70,7 @@ export const RiskDial = () => {
     let n = 0;
     const push = (i: number) => {
       const s = SCRIPT[i]!;
-      const t = new Date().toLocaleTimeString("es", { hour12: false });
+      const t = new Date().toLocaleTimeString("en-GB", { hour12: false });
       setLog(prev => [{ id: n++, t, text: s.text, tone: s.tone }, ...prev].slice(0, 4));
     };
 
@@ -126,7 +126,7 @@ export const RiskDial = () => {
           viewBox={`0 0 ${SIZE} ${SIZE}`}
           className="h-full w-full"
           role="img"
-          aria-label="Dial de distancia a liquidación"
+          aria-label="Distance to liquidation dial"
         >
           {/* slow orbit of faint marks: the instrument is "on" */}
           <g className="dial-orbit" style={{ transformOrigin: `${C}px ${C}px` }}>
@@ -194,12 +194,12 @@ export const RiskDial = () => {
         </svg>
         {/* The readout sits in the dial's open lower sector, clear of the needle hub. */}
         <div className="pointer-events-none absolute inset-x-0 top-[58%] flex flex-col items-center gap-1">
-          <p className="num text-[11px] uppercase tracking-[0.18em] text-smoke">Distancia a liquidación</p>
+          <p className="num text-[11px] uppercase tracking-[0.18em] text-smoke">Distance to liquidation</p>
           <p ref={readout} className="num text-5xl font-semibold tracking-tight text-long sm:text-6xl">
             0.0%
           </p>
           <p ref={status} className="num text-[11px] uppercase tracking-[0.18em] text-ash">
-            EN RANGO
+            IN RANGE
           </p>
         </div>
         {/* tick labels at the guardian thresholds */}
@@ -230,10 +230,10 @@ export const RiskDial = () => {
             </span>
           </li>
         ))}
-        {log.length === 0 && <li className="text-smoke">iniciando instrumento…</li>}
+        {log.length === 0 && <li className="text-smoke">starting instrument…</li>}
       </ol>
       <p className="num text-[10px] uppercase tracking-[0.16em] text-smoke">
-        Simulación ilustrativa · reglas reales del guardián
+        Illustrative simulation · real guardian rules
       </p>
     </div>
   );
