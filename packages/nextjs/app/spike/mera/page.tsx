@@ -1,6 +1,6 @@
 "use client";
 
-// Spike S1 (docs/PLAN.md §4): passkey → same EVM address across sessions → signed tx on Monad testnet.
+// Spike S1: passkey → same EVM address across sessions → signed tx on Monad testnet.
 // Success criterion: the address after "Sign in" equals the one after "Create", on the same device,
 // and "Send 0 MON to self" returns a tx hash visible on the testnet explorer.
 import { useState } from "react";

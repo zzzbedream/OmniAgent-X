@@ -1,4 +1,4 @@
-// Spike S3 (docs/PLAN.md §4): cron → EVM read (lastSequence) → signed report → OmniReceiverSpike.onReport on Monad testnet.
+// Spike S3: cron → EVM read (lastSequence) → signed report → OmniReceiverSpike.onReport on Monad testnet.
 // No LLM calls here on purpose: S3 only proves the CRE ↔ Monad testnet write path.
 import { bytesToHex, cre, encodeCallMsg, getNetwork, hexToBase64, LAST_FINALIZED_BLOCK_NUMBER, type Runtime } from "@chainlink/cre-sdk";
 import { type Address, decodeFunctionResult, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, zeroAddress } from "viem";

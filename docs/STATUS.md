@@ -32,15 +32,15 @@ yarn start                                                           # PWA on :3
 
 ### Known gaps (not done, on purpose or blocked)
 - **Order cap fix (2026-10-08):** `maxNegPnlCollatBPS` was 0, so every crossing order would have reverted. The builder now sets a cap (see VERIFIED_FACTS), and the dry-run simulates each order on-chain.
-- **Automated live E2E (2026-10-09): 11/11.** A new user in headless Chromium with a virtual passkey (`scripts/qa/live-e2e.mjs`, DEMO.md) completed onboarding, a live open, the position view, a close and a withdraw.
+- **Automated live E2E (2026-10-09): 11/11.** A new user in headless Chromium with a virtual passkey (`packages/nextjs/scripts/qa/live-e2e.mjs`) completed onboarding, a live open, the position view, a close and a withdraw.
   - An earlier run stopped on a test bug after the open. It left an orphan 0.002 ETH short on account `0x5E09…E330`; its virtual passkey is gone, so nobody can close it. The script now always runs close and withdraw.
 - **Execution is live since 2026-10-09** (`EXECUTION_ENABLED=true` on the VPS worker). The full open → read → close cycle was verified on testnet (VERIFIED_FACTS). Collateral top-ups are on since 2026-10-10 (`GUARDIAN_ADD_COLLATERAL=true`, after spike S2-bis verified `increasePositionCollateral`). Mandates signed in dry-run do not run live until re-activated.
 - **Close orders** exist (worker `POST /close`, dashboard button, owner-signed `ClosePosition`). The side comes from the worker's own log of orders it sent (verified enum), or from the indexer calibration. Unknown → rejected, never guessed. Close/IOC semantics are unverified on testnet.
 - `/operator/consent` requires an owner-signed `ConsentRequest`. POST routes are rate-limited per IP (in memory, per process). One execution runs at a time per account.
-- Deployment: the worker Dockerfile is verified (build, run, healthy, non-root). Vercel for the PWA is unverified. See `docs/DEPLOY.md` and `docs/DEMO.md`.
+- Deployment: the worker Dockerfile is verified (build, run, healthy, non-root). Vercel for the PWA is unverified. See `docs/DEPLOY.md`.
   - 2026-10-08: worker `093d169` runs on the team VPS (Docker, `127.0.0.1:8788` behind Caddy) at `https://omniagent.147-93-178-184.sslip.io`, **dry-run**. Verified: `/health` over HTTPS and CORS preflight for `http://localhost:3000`.
   - 2026-10-08: the PWA runs on the same VPS (`packages/nextjs/Dockerfile`, `127.0.0.1:3100`) at `https://omniagent-app.147-93-178-184.sslip.io`. That hostname is the passkey `rpId`, so keep it. Verified over HTTPS: `/`, `/onboard`, `/intent`, `/dashboard`, `/guardian` and the agent card return 200. `/api/strategy` has the LLM configured and rejects unsigned requests with 401. Passkeys on a real device are still pending.
-  - 2026-10-09: the redesigned front is live ("OmniAgent Terminal" design system, `packages/nextjs/.stitch/DESIGN.md`).
+  - 2026-10-09: the redesigned front is live (dark "instrument" design system).
     - The landing page replaces the Scaffold-ETH home.
     - `/intent` shows the decision pipeline, the order ticket, the rules checklist and a readable agent result.
     - The dashboard takes a position's side from the worker's decision log when there is no indexer.

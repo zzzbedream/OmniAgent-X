@@ -24,7 +24,7 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang="es" className={`${barlow.variable} ${jetbrains.variable}`} suppressHydrationWarning>
       <body>
-        {/* One dark theme by design (.stitch/DESIGN.md); the scaffold's theme switch is gone. */}
+        {/* One dark theme by design; the scaffold's theme switch is gone. */}
         <ThemeProvider forcedTheme="dark">
           <ScaffoldEthAppWithProviders>{children}</ScaffoldEthAppWithProviders>
         </ThemeProvider>

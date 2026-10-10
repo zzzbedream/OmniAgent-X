@@ -7,7 +7,7 @@ You describe a trade in plain language. An LLM proposes a plan, deterministic ri
 - **Live app (testnet):** https://omniagent-app.147-93-178-184.sslip.io
 - **Agent worker health:** https://omniagent.147-93-178-184.sslip.io/health
 
-Source of truth for what is verified and what is not: [`docs/STATUS.md`](docs/STATUS.md) and [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md). The plan, in Spanish, is in [`docs/PLAN.md`](docs/PLAN.md).
+Source of truth for what is verified and what is not: [`docs/STATUS.md`](docs/STATUS.md) and [`docs/VERIFIED_FACTS.md`](docs/VERIFIED_FACTS.md).
 
 ## How it works
 
@@ -62,7 +62,7 @@ After the first visit, use **Ya tengo passkey**. On iOS, "Crear passkey" always 
 |---|---|
 | `packages/core` | Perpl ABIs and order builder, allowlist repair, plan schema, `RiskPolicy`, EIP-712 types, LLM pipeline, risk metrics, guardian engine |
 | `packages/agent-worker` | Operator service: consent, plan and close validation, `execOrder`, guardian loop, gas station, decision log |
-| `packages/nextjs` | PWA: `/onboard`, `/intent`, `/dashboard`, `/guardian`, `/api/strategy`, `/api/guardian/compile`. Mera is in `lib/mera/`; the design system is in `.stitch/` |
+| `packages/nextjs` | PWA: `/onboard`, `/intent`, `/dashboard`, `/guardian`, `/api/strategy`, `/api/guardian/compile`. Mera is in `lib/mera/` |
 | `packages/indexer` | Envio HyperIndex over Perpl events of factory-created accounts |
 | `packages/foundry` | Contracts and forge tests; the CRE receiver spike |
 | `cre/spike-workflow` | Chainlink CRE workflow (TypeScript → WASM) |
@@ -78,7 +78,6 @@ yarn start                    # PWA on :3000; passkeys need HTTPS outside localh
 ```
 
 - **Deploy.** Docker images for the worker and the PWA, behind Caddy; see [`docs/DEPLOY.md`](docs/DEPLOY.md).
-- **Demo script.** [`docs/DEMO.md`](docs/DEMO.md).
 - **Automated live test.** `packages/nextjs/scripts/qa/live-e2e.mjs` drives the whole journey in headless Chromium with a virtual passkey that supports PRF. It runs against the real PWA, worker and testnet, and saves screenshots and a video.
 
 ## Honest caveats

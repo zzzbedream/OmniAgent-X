@@ -2,7 +2,7 @@
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-/* OmniAgent "Instrument" — warm charcoal, technical type; colour lives in the data (.stitch/DESIGN.md). */
+/* OmniAgent "Instrument" — warm charcoal, technical type; colour lives in the data. */
 @theme {
   --font-sans: var(--font-barlow), "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;

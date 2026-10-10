@@ -21,3 +21,10 @@ node_modules
 
 # cli
 dist
+# Internal working material (kept locally, not published)
+CLAUDE.md
+docs/PLAN.md
+docs/DEMO.md
+docs/pitch/
+packages/nextjs/.stitch/
+.cursor/
