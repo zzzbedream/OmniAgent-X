@@ -51,7 +51,7 @@ Most of the full journey is nine allowlist transactions. On the public RPC they 
 You need an iPhone with iOS 18+ (Safari) or an Android phone with Chrome and Google Password Manager.
 
 1. **Account.** Type a name and press **Create passkey**. Test gas and AUSD arrive by themselves within a few seconds.
-2. Press **Create trading account**, then **Repair permissions**, then **Deposit and open** (100 AUSD minimum on testnet).
+2. Press **Create trading account**. With the same fingerprint it creates the account and sets up the agent's permissions (a progress bar, about nine quick transactions). Then press **Deposit and open** (100 AUSD minimum on testnet).
 3. **Strategy.** Type e.g. "Small ETH short, low risk" with a margin budget of 5, then **Generate plan** and **Approve with passkey**.
 4. **Risk.** See the position, then **Close with passkey**. Back in **Account**, press **Withdraw**.
 5. **Guardian (optional).** Before closing, pick the **Demo: instant top-up** preset, press **Translate rules** and **Activate with passkey**. The agent adds collateral to the open position on its own.

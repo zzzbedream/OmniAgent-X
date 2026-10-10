@@ -54,6 +54,8 @@ const Onboard: NextPage = () => {
   const [log, setLog] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [fundState, setFundState] = useState<"idle" | "running" | "done">("idle");
+  /** Progress of the agent-permission setup that follows account creation. */
+  const [setup, setSetup] = useState<{ done: number; total: number }>();
 
   const push = useCallback(
     (line: string) => setLog(prev => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 30)),
@@ -153,21 +155,22 @@ const Onboard: NextPage = () => {
     if (fundState === "idle" && status && status.monBalance < LOW_GAS_WEI) void requestTestFunds();
   }, [fundState, status, requestTestFunds]);
 
-  const tx = async (label: string, fn: () => Promise<`0x${string}`>) => {
+  /** `quiet` logs only failures and skips the refresh, for steps that report their own progress. */
+  const tx = async (label: string, fn: () => Promise<`0x${string}`>, { quiet = false } = {}) => {
     setPending(true);
     try {
       const hash = await fn();
-      push(`${label}: sent ${hash}`);
+      if (!quiet) push(`${label}: sent ${hash}`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error(`reverted (${hash})`);
-      push(`${label}: confirmed`);
+      if (!quiet) push(`${label}: confirmed`);
       return receipt;
     } catch (e) {
       push(`${label} failed: ${friendlyTxError(e)}`);
       return undefined;
     } finally {
       setPending(false);
-      void refresh();
+      if (!quiet) void refresh();
     }
   };
 
@@ -218,24 +221,46 @@ const Onboard: NextPage = () => {
     saveDelegatedAccount(account.address, created.args.proxy);
     setDelegated(created.args.proxy);
     push(`delegated account: ${created.args.proxy} (operator ${created.args.operator})`);
+    // Same fingerprint: a new account still needs its agent permissions, so the setup continues on its own.
+    await setUpAgentPermissions(created.args.proxy);
   };
 
-  // One owner transaction per selector, same changes as Perpl's SyncOperatorAllowlistScript.
-  const repairAllowlist = async () => {
-    if (!walletClient || !status?.account) return;
-    if (!(await confirmed("repair permissions"))) return;
-    const acc = status.account;
-    for (const change of acc.allowlistDrift) {
-      const ok = await tx(`${change.allowed ? "allow" : "revoke"} ${change.name}`, () =>
-        walletClient.writeContract({
-          address: acc.address,
-          abi: delegatedAccountAbi,
-          functionName: "setOperatorAllowlist",
-          args: [change.selector, change.allowed],
-        }),
-      );
-      if (!ok) return;
+  // Perpl's testnet factory creates accounts with an old operator allowlist. One owner transaction per selector
+  // applies the same changes as Perpl's SyncOperatorAllowlistScript, so the agent can call execOrder.
+  const setUpAgentPermissions = async (proxy: Address) => {
+    if (!walletClient) return;
+    const changes = await readAllowlistDrift(publicClient, proxy).catch(() => undefined);
+    if (!changes) return push("agent permissions failed: could not read the allowlist");
+    if (changes.length === 0) return;
+    setSetup({ done: 0, total: changes.length });
+    try {
+      for (const [i, change] of changes.entries()) {
+        const ok = await tx(
+          `agent permission ${change.name}`,
+          () =>
+            walletClient.writeContract({
+              address: proxy,
+              abi: delegatedAccountAbi,
+              functionName: "setOperatorAllowlist",
+              args: [change.selector, change.allowed],
+            }),
+          { quiet: true },
+        );
+        if (!ok) return;
+        setSetup({ done: i + 1, total: changes.length });
+      }
+      push(`agent permissions: confirmed (${changes.length} updates)`);
+    } finally {
+      setSetup(undefined);
+      void refresh();
     }
+  };
+
+  // Accounts created elsewhere, or a setup interrupted midway, finish it from here.
+  const finishSetup = async () => {
+    if (!status?.account) return;
+    if (!(await confirmed("agent permissions"))) return;
+    await setUpAgentPermissions(status.account.address);
   };
 
   const deposit = async () => {
@@ -397,7 +422,7 @@ const Onboard: NextPage = () => {
             <div className="flex flex-col gap-2">
               <button
                 className="btn btn-primary"
-                disabled={pending || fundState === "running"}
+                disabled={pending || !!setup || fundState === "running"}
                 onClick={createTradingAccount}
               >
                 Create trading account
@@ -433,26 +458,32 @@ const Onboard: NextPage = () => {
         </section>
       )}
 
-      {account && delegated && status?.account && status.account.allowlistDrift.length > 0 && (
-        <section className="flex flex-col gap-3 rounded-[var(--radius-box)] border border-amber/40 bg-amber/5 p-4">
-          <h2 className="font-semibold text-amber">Agent permissions out of date</h2>
-          <p className="text-sm text-ash">
-            Perpl&apos;s testnet factory creates accounts with an old allowlist, so the agent cannot call{" "}
-            <code className="num text-bone">execOrder</code> yet. This applies the same changes as Perpl&apos;s official
-            script: {status.account.allowlistDrift.length} transactions signed by you.
+      {setup && (
+        <section
+          className="flex flex-col gap-2 rounded-[var(--radius-box)] border border-violet/40 bg-violet-wash p-4"
+          aria-label="Agent setup"
+        >
+          <p className="flex items-center gap-2 text-sm">
+            <span className="loading loading-spinner loading-xs text-violet" aria-hidden />
+            Setting up agent permissions…
+            <span className="num text-ash">
+              {setup.done}/{setup.total}
+            </span>
           </p>
-          <ul className="flex flex-col gap-1 text-xs">
-            {status.account.allowlistDrift.map(c => (
-              <li key={c.selector} className="flex items-center justify-between gap-2">
-                <span className={c.allowed ? "text-long" : "text-short"}>
-                  {c.allowed ? "allow" : "revoke"} {c.name}
-                </span>
-                <span className="num text-smoke">{c.selector}</span>
-              </li>
-            ))}
-          </ul>
-          <button className="btn btn-warning" disabled={pending} onClick={repairAllowlist}>
-            Repair permissions
+          <progress className="progress progress-primary w-full" value={setup.done} max={setup.total} />
+          <p className="text-xs text-smoke">The agent may trade and add collateral. Withdrawals stay yours only.</p>
+        </section>
+      )}
+
+      {account && delegated && !setup && status?.account && status.account.allowlistDrift.length > 0 && (
+        <section className="panel flex flex-col gap-3 p-4" aria-label="Agent setup">
+          <h2 className="font-semibold">Finish agent setup</h2>
+          <p className="text-sm text-ash">
+            Your trading account needs {status.account.allowlistDrift.length} more permission updates before the agent
+            can place orders. One fingerprint, then they run on their own.
+          </p>
+          <button className="btn btn-primary" disabled={pending} onClick={finishSetup}>
+            Finish setup
           </button>
         </section>
       )}
@@ -488,12 +519,12 @@ const Onboard: NextPage = () => {
             </div>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <button className="btn btn-primary" disabled={pending} onClick={deposit}>
+            <button className="btn btn-primary" disabled={pending || !!setup} onClick={deposit}>
               {status.account.accountId === 0n ? "Deposit and open" : "Deposit"}
             </button>
             <button
               className="btn btn-outline border-short/50 text-short hover:border-short hover:bg-short/10"
-              disabled={pending || status.account.accountId === 0n}
+              disabled={pending || !!setup || status.account.accountId === 0n}
               onClick={withdraw}
             >
               Withdraw

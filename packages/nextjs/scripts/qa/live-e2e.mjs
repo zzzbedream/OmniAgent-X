@@ -113,12 +113,12 @@ try {
     return (await activity()).find(l => /delegated account: 0x/.test(l))?.match(/0x[0-9a-fA-F]{40}/)?.[0];
   });
 
-  await step("Repair agent permissions (passkey, 9 tx)", async () => {
-    const repair = page.getByRole("button", { name: "Repair permissions" });
-    await repair.waitFor({ timeout: 30_000 });
-    await repair.click();
-    await page.getByRole("heading", { name: "Agent permissions out of date" }).waitFor({ state: "detached", timeout: 240_000 });
+  await step("Agent permissions set up on their own (same passkey, 9 tx)", async () => {
+    // No second button: account creation continues straight into the permission setup, with progress, not a warning.
+    await waitActivity(/agent permissions: confirmed|failed/, 240_000);
     await failIfActivity(/failed/);
+    await page.locator("section[aria-label='Agent setup']").waitFor({ state: "detached", timeout: 30_000 });
+    return (await activity()).find(l => /agent permissions: confirmed/.test(l));
   });
 
   await step("Deposit 100 AUSD and open account (passkey)", async () => {
