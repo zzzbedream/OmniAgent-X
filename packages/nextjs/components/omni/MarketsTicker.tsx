@@ -43,20 +43,20 @@ export const MarketsTicker = () => {
   return (
     <section aria-label="Mercados en vivo" className="flex flex-col gap-3">
       <header className="flex items-center justify-between">
-        <h2 className="label-caps">Mercados perp en vivo</h2>
+        <h2 className="num text-[12px] uppercase tracking-[0.18em] text-ash">Mercados perp en vivo</h2>
         <span className="num flex items-center gap-1.5 text-[11px] text-smoke">
-          <span className={`h-1.5 w-1.5 rounded-full ${hasError ? "bg-short" : "bg-long animate-pulse"}`} aria-hidden />
+          <span className={`h-1.5 w-1.5 ${hasError ? "bg-short" : "bg-long animate-pulse"}`} aria-hidden />
           {hasError ? "sin conexión" : "Perpl testnet · on-chain"}
         </span>
       </header>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-px border-y border-line bg-line sm:grid-cols-4">
         {MARKET_SYMBOLS.map(m => {
           const q = quotes[m];
           const change = q && q.first > 0 ? ((q.mark - q.first) / q.first) * 100 : 0;
           return (
-            <div key={m} className="panel flex flex-col gap-1 p-3">
-              <span className="num text-[11px] text-smoke">{m}-PERP</span>
-              <span className="num text-lg font-semibold">
+            <div key={m} className="flex flex-col gap-2 bg-void py-5 pr-4 sm:pl-5 sm:first:pl-0">
+              <span className="num text-[11px] uppercase tracking-[0.16em] text-smoke">{m}-PERP</span>
+              <span className="num text-[28px] font-semibold leading-none tracking-tight">
                 {q ? q.mark.toLocaleString("en-US", { maximumFractionDigits: q.mark < 1 ? 5 : 2 }) : "—"}
               </span>
               <span

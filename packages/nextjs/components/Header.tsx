@@ -15,17 +15,11 @@ const SHOW_DEV_TOOLS = process.env.NEXT_PUBLIC_SHOW_WALLET_CONNECT === "true";
 
 const shortAddress = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-/** Wordmark: a terminal prompt glyph next to the product name. */
+/** Wordmark: lowercase name and a signal dot, like an instrument maker's mark. */
 export const Wordmark = () => (
-  <Link href="/" className="flex items-center gap-2" aria-label="OmniAgent X, inicio">
-    <span className="flex h-7 w-7 items-center justify-center rounded-md border border-line-strong bg-violet-wash text-violet">
-      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-        <path d="M3 4.5 6.5 8 3 11.5M8 11.5h5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-    <span className="text-[15px] font-bold tracking-tight">
-      OmniAgent <span className="text-violet">X</span>
-    </span>
+  <Link href="/" className="flex items-baseline gap-0.5" aria-label="OmniAgent X, inicio">
+    <span className="text-[19px] font-bold tracking-[-0.01em]">omniagent</span>
+    <span className="h-1.5 w-1.5 -translate-y-2.5 bg-short" aria-hidden />
   </Link>
 );
 
@@ -40,11 +34,11 @@ export const Header = () => {
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-void/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex h-16 max-w-[1240px] items-center justify-between gap-3 px-5 lg:px-10">
         <Wordmark />
 
         <nav aria-label="Secciones" className="hidden lg:block">
-          <ul className="flex items-center gap-1">
+          <ul className="flex items-center gap-6">
             {NAV_ITEMS.map(({ label, href }) => {
               const isActive = pathname === href;
               return (
@@ -52,8 +46,8 @@ export const Header = () => {
                   <Link
                     href={href}
                     aria-current={isActive ? "page" : undefined}
-                    className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                      isActive ? "bg-violet-wash text-bone" : "text-ash hover:bg-raised hover:text-bone"
+                    className={`num border-b py-1 text-[12px] uppercase tracking-[0.14em] transition-colors ${
+                      isActive ? "border-bone text-bone" : "border-transparent text-ash hover:text-bone"
                     }`}
                   >
                     {label}
@@ -72,16 +66,22 @@ export const Header = () => {
         </nav>
 
         <div className="flex items-center gap-2">
-          <span className="chip-muted hidden sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-long" aria-hidden />
+          <span className="num hidden items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-smoke sm:inline-flex">
+            <span className="h-1.5 w-1.5 bg-long" aria-hidden />
             Monad testnet
           </span>
           {account ? (
-            <Link href="/onboard" className="num rounded-md border border-line bg-panel px-2 py-1 text-xs text-ash">
+            <Link
+              href="/onboard"
+              className="num border border-line-strong px-2.5 py-1.5 text-xs text-ash hover:text-bone"
+            >
               {shortAddress(account.address)}
             </Link>
           ) : (
-            <Link href="/onboard" className="btn btn-primary btn-sm">
+            <Link
+              href="/onboard"
+              className="num border border-line-strong px-3 py-1.5 text-[12px] uppercase tracking-[0.12em] text-bone hover:border-bone"
+            >
               Entrar
             </Link>
           )}

@@ -3748,6 +3748,7 @@ __metadata:
     "@uniswap/sdk-core": ~5.8.2
     "@uniswap/v2-sdk": ~4.6.1
     abitype: 1.0.6
+    animejs: ^4
     autoprefixer: ~10.4.20
     bgipfs: ~0.0.12
     blo: ~1.2.0
@@ -5642,6 +5643,21 @@ __metadata:
     json-schema-traverse: ^0.4.1
     uri-js: ^4.2.2
   checksum: a8e0308f1b44c3dfd1143911353be51bf8aedc2f2bcd595061755ad241c8450a10e4b657af8ba764c5ec9ae2162010f21d5e0d43763e20d782a8171da99b967a
+  languageName: node
+  linkType: hard
+
+"animejs@npm:^4":
+  version: 4.5.0
+  resolution: "animejs@npm:4.5.0"
+  peerDependencies:
+    "@types/three": ">=0.150.0"
+    three: ">=0.150.0"
+  peerDependenciesMeta:
+    "@types/three":
+      optional: true
+    three:
+      optional: true
+  checksum: 54bc7b8b9b412e3d71d3fef82d661a516daa6b81150475564fb140773f6a04b5b9e9373cf108058be2a53aa7f4ba065ed0ca300955a04d38d9cbddad95e51d37
   languageName: node
   linkType: hard
 

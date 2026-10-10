@@ -1,11 +1,17 @@
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Barlow, JetBrains_Mono } from "next/font/google";
 import "@rainbow-me/rainbowkit/styles.css";
 import { ScaffoldEthAppWithProviders } from "~~/components/ScaffoldEthAppWithProviders";
 import { ThemeProvider } from "~~/components/ThemeProvider";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+// Barlow: a technical grotesk in the DIN family of instrument lettering; JetBrains Mono for every number.
+const barlow = Barlow({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-barlow",
+  display: "swap",
+});
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", display: "swap" });
 
 export const metadata = getMetadata({
@@ -16,7 +22,7 @@ export const metadata = getMetadata({
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (
-    <html lang="es" className={`${inter.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${barlow.variable} ${jetbrains.variable}`} suppressHydrationWarning>
       <body>
         {/* One dark theme by design (.stitch/DESIGN.md); the scaffold's theme switch is gone. */}
         <ThemeProvider forcedTheme="dark">

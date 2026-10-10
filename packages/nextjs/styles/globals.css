@@ -2,25 +2,25 @@
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-/* OmniAgent Terminal — tokens from .stitch/DESIGN.md. One dark theme; colour always carries meaning. */
+/* OmniAgent "Instrument" — warm charcoal, technical type; colour lives in the data (.stitch/DESIGN.md). */
 @theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-barlow), "Helvetica Neue", Arial, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
-  --color-void: #0b0b10;
-  --color-panel: #13131b;
-  --color-raised: #1b1b26;
-  --color-line: #2a2a3a;
-  --color-line-strong: #3d3a55;
-  --color-bone: #ece9f5;
-  --color-ash: #9a97ab;
-  --color-smoke: #6b687c;
+  --color-void: #1f1e1c;
+  --color-panel: #272623;
+  --color-raised: #2f2d2a;
+  --color-line: #3a3834;
+  --color-line-strong: #4f4c46;
+  --color-bone: #f6f4f2;
+  --color-ash: #b8b3ab;
+  --color-smoke: #8c877f;
   --color-violet: #836ef9;
-  --color-violet-wash: #221c45;
-  --color-long: #2ee6a0;
-  --color-short: #ff5c7a;
-  --color-amber: #f5b84a;
-  --color-signal: #6fa8ff;
+  --color-violet-wash: #2c2742;
+  --color-long: #3ddc97;
+  --color-short: #ff5a4f;
+  --color-amber: #f5a524;
+  --color-signal: #5aa9ff;
 
   --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-ping-slow: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
@@ -35,30 +35,30 @@
   default: true;
   color-scheme: dark;
 
-  --color-base-100: #13131b;
-  --color-base-200: #0b0b10;
-  --color-base-300: #1b1b26;
-  --color-base-content: #ece9f5;
+  --color-base-100: #272623;
+  --color-base-200: #1f1e1c;
+  --color-base-300: #2f2d2a;
+  --color-base-content: #f6f4f2;
   --color-primary: #836ef9;
-  --color-primary-content: #0b0b10;
-  --color-secondary: #221c45;
-  --color-secondary-content: #ece9f5;
+  --color-primary-content: #1f1e1c;
+  --color-secondary: #2c2742;
+  --color-secondary-content: #f6f4f2;
   --color-accent: #836ef9;
-  --color-accent-content: #0b0b10;
-  --color-neutral: #1b1b26;
-  --color-neutral-content: #ece9f5;
-  --color-info: #6fa8ff;
-  --color-info-content: #0b0b10;
-  --color-success: #2ee6a0;
-  --color-success-content: #0b0b10;
-  --color-warning: #f5b84a;
-  --color-warning-content: #0b0b10;
-  --color-error: #ff5c7a;
-  --color-error-content: #0b0b10;
+  --color-accent-content: #1f1e1c;
+  --color-neutral: #2f2d2a;
+  --color-neutral-content: #f6f4f2;
+  --color-info: #5aa9ff;
+  --color-info-content: #1f1e1c;
+  --color-success: #3ddc97;
+  --color-success-content: #1f1e1c;
+  --color-warning: #f5a524;
+  --color-warning-content: #1f1e1c;
+  --color-error: #ff5a4f;
+  --color-error-content: #1f1e1c;
 
   --radius-selector: 9999rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.375rem;
   --border: 1px;
   --depth: 0;
   --noise: 0;
@@ -83,9 +83,7 @@
     min-height: 100vh;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* Faint dot grid: the "terminal paper" the panels sit on. */
-    background-image: radial-gradient(rgb(131 110 249 / 0.07) 1px, transparent 1px);
-    background-size: 22px 22px;
+    font-feature-settings: "tnum" 1;
   }
 
   p {
