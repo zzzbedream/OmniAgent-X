@@ -85,8 +85,6 @@ yarn start                    # PWA on :3000; passkeys need HTTPS outside localh
 
 - **Testnet only.** The collateral is Agora's test AUSD, read on-chain from `Exchange.getExchangeInfo()`.
 - **The operator is a hot key on a VPS (Phase 1).** Phase 2 (our own vault driven by Chainlink CRE) has not started.
-- **Guardian collateral top-ups are disabled.** The parameter order of `increasePositionCollateral` is unverified on testnet. Reduce and close rules work.
 - **Position side is never guessed.** Without the indexer, only positions opened by this worker can be closed from the app.
-- **The trading account address is remembered per browser.** In another browser the app offers to create a new account.
 - **Estimates only.** PnL and liquidation price ignore funding and fees; Perpl does not publish its margin formula.
 - **In-memory limits.** LLM quotas and rate limits are per process and in memory.

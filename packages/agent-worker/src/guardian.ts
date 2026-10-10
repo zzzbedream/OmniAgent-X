@@ -153,7 +153,7 @@ export type GuardianDeps = {
   store: GuardianStore;
   log: DecisionLog;
   mode: "dry-run" | "live";
-  /** Top-ups stay off until increasePositionCollateral is proven on testnet (spike S2-bis). */
+  /** Whether collateral top-ups may run (GUARDIAN_ADD_COLLATERAL; the call was verified on testnet in spike S2-bis). */
   addCollateralEnabled: boolean;
   readPositions: (rec: MandateRecord) => Promise<GuardedPosition[]>;
   execute: (rec: MandateRecord, action: GuardianAction, position: GuardedPosition) => Promise<ExecutionOutcome>;

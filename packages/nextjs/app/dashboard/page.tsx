@@ -28,8 +28,9 @@ import {
 import type { NextPage } from "next";
 import { type Address, formatUnits, isAddress } from "viem";
 import { useMarketData } from "~~/hooks/omni/useMarketData";
+import { resolveDelegatedAccount } from "~~/lib/omni/account";
 import { type Calibration, INDEXER_URL, type IndexedEvent, fetchIndexed, sideForRaw } from "~~/lib/omni/indexer";
-import { loadDelegatedAccount, worker } from "~~/lib/omni/worker";
+import { worker } from "~~/lib/omni/worker";
 import { publicClient, useMera } from "~~/services/mera/MeraProvider";
 
 const POLL_MS = 10_000;
@@ -69,8 +70,13 @@ const Dashboard: NextPage = () => {
   // Account to watch: ?account=0x… (read-only view for anyone) or the signed-in user's DelegatedAccount.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("account");
-    if (q && isAddress(q)) setTarget(q);
-    else if (account) setTarget(loadDelegatedAccount(account.address));
+    if (q && isAddress(q)) return setTarget(q);
+    if (!account) return;
+    let cancelled = false;
+    void resolveDelegatedAccount(account.address).then(r => !cancelled && setTarget(r?.address));
+    return () => {
+      cancelled = true;
+    };
   }, [account]);
 
   useEffect(() => {

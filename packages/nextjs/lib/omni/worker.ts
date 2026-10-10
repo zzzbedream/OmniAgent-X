@@ -54,6 +54,9 @@ export const worker = {
   /** Body: { message, signature } — a GuardianRevoke signed by the owner. */
   revokeGuardian: (body: unknown) =>
     call<{ active: false }>("/guardian/revoke", { method: "POST", body: JSON.stringify(body) }),
+  /** DelegatedAccounts the owner created with this worker's operator, newest first (on-chain factory events). */
+  accounts: (owner: Address) =>
+    call<{ owner: Address; accounts: Address[]; synced: boolean }>(`/accounts?owner=${encodeURIComponent(owner)}`),
 };
 
 export type GuardianStatus = {

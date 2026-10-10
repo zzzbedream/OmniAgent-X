@@ -4,6 +4,16 @@ import { loadConfig } from "../src/config";
 const OPERATOR = `0x${"11".repeat(32)}`;
 const STATION = `0x${"22".repeat(32)}`;
 
+describe("loadConfig account index", () => {
+  it("is off without ACCOUNT_INDEX_FROM_BLOCK and parses a block number when set", () => {
+    expect(loadConfig({ OPERATOR_PK: OPERATOR }).accountIndexFromBlock).toBeUndefined();
+    expect(loadConfig({ OPERATOR_PK: OPERATOR, ACCOUNT_INDEX_FROM_BLOCK: "69250000" }).accountIndexFromBlock).toBe(
+      69_250_000n,
+    );
+    expect(() => loadConfig({ OPERATOR_PK: OPERATOR, ACCOUNT_INDEX_FROM_BLOCK: "-1" })).toThrow(/ACCOUNT_INDEX_FROM_BLOCK/);
+  });
+});
+
 describe("loadConfig gas station", () => {
   it("is off without GAS_STATION_PK", () => {
     expect(loadConfig({ OPERATOR_PK: OPERATOR }).gasStation).toBeUndefined();

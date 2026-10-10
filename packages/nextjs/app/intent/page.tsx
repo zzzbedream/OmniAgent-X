@@ -22,7 +22,8 @@ import { OrderTicket } from "~~/components/omni/OrderTicket";
 import { PIPELINE_STEPS, PipelineRail } from "~~/components/omni/PipelineRail";
 import { RulesChecklist } from "~~/components/omni/RulesChecklist";
 import { ScopeChips } from "~~/components/omni/ScopeChips";
-import { loadDelegatedAccount, worker } from "~~/lib/omni/worker";
+import { resolveDelegatedAccount } from "~~/lib/omni/account";
+import { worker } from "~~/lib/omni/worker";
 import { useMera } from "~~/services/mera/MeraProvider";
 
 type StrategyResponse = {
@@ -51,7 +52,12 @@ const Intent: NextPage = () => {
   const [isLiveWorker, setIsLiveWorker] = useState<boolean>();
 
   useEffect(() => {
-    if (account) setDelegated(loadDelegatedAccount(account.address));
+    if (!account) return;
+    let cancelled = false;
+    void resolveDelegatedAccount(account.address).then(r => !cancelled && setDelegated(r?.address));
+    return () => {
+      cancelled = true;
+    };
   }, [account]);
 
   useEffect(() => {

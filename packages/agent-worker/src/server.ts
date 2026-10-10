@@ -25,6 +25,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
 import type { WorkerConfig } from "./config";
 import { checkAccountAccess, checkAccountOnChain, executeClose, executeGuardianAction, executePlan } from "./executor";
+import { AccountIndex } from "./accountIndex";
 import { GasStation } from "./gasStation";
 import { GuardianLoop, GuardianStore } from "./guardian";
 import { makePositionReader } from "./guardianChain";
@@ -41,6 +42,8 @@ import {
 } from "./validate";
 
 const MAX_BODY_BYTES = 64 * 1024;
+/** Monad testnet makes ~2.5 blocks/s, so a 100-block window fills in ~40 s; 10 s keeps new accounts visible fast. */
+const ACCOUNT_INDEX_POLL_MS = 10_000;
 /** Bounds the guardian's per-tick work (security review M5). */
 const MAX_ACTIVE_MANDATES = 200;
 
@@ -169,6 +172,28 @@ export function createWorker(cfg: WorkerConfig) {
   });
   const guardianInfo = { intervalMs: cfg.guardianIntervalMs, addCollateralEnabled: cfg.guardianAddCollateral };
   const gasStation = cfg.gasStation ? makeGasStation(cfg.gasStation, client, cfg.rpcUrl, cfg.dataDir) : undefined;
+  const accountIndex =
+    cfg.accountIndexFromBlock === undefined
+      ? undefined
+      : new AccountIndex({
+          dataDir: cfg.dataDir,
+          fromBlock: cfg.accountIndexFromBlock,
+          deps: {
+            getHead: () => client.getBlockNumber(),
+            getCreated: async (fromBlock, toBlock) => {
+              const logs = await client.getContractEvents({
+                address: PERPL_TESTNET.factory,
+                abi: delegatedAccountFactoryAbi,
+                eventName: "DelegatedAccountCreated",
+                args: { operator: operator.address },
+                fromBlock,
+                toBlock,
+                strict: true,
+              });
+              return logs.map(l => ({ proxy: l.args.proxy, owner: l.args.owner }));
+            },
+          },
+        });
 
   const routes: Record<string, (req: IncomingMessage, url: URL) => Promise<[number, unknown]>> = {
     "GET /health": async () => [
@@ -183,6 +208,16 @@ export function createWorker(cfg: WorkerConfig) {
     ],
 
     "GET /operator": async () => [200, { operator: operator.address, chainId: PERPL_TESTNET.chainId }],
+
+    // DelegatedAccounts this owner created with our operator, newest first (public on-chain facts, no auth).
+    // Lets the PWA recover the trading account on a browser that never saw it being created.
+    "GET /accounts": async (_req, url) => {
+      if (!accountIndex) return [503, { error: "account index disabled" }];
+      const owner = url.searchParams.get("owner");
+      if (!owner || !isAddress(owner)) throw new ValidationError("owner must be an address");
+      const { cursor, head, synced } = accountIndex.status();
+      return [200, { owner: getAddress(owner), accounts: accountIndex.accountsOf(owner), synced, cursor, head }];
+    },
 
     // Testnet gas + collateral for a brand-new passkey address, which cannot send its first transaction otherwise.
     // The owner signs a FundRequest; the station funds each address once and stops at a daily cap.
@@ -409,6 +444,10 @@ export function createWorker(cfg: WorkerConfig) {
     }
   });
   guardianLoop.start(cfg.guardianIntervalMs);
-  server.on("close", () => guardianLoop.stop());
+  accountIndex?.start(ACCOUNT_INDEX_POLL_MS);
+  server.on("close", () => {
+    guardianLoop.stop();
+    accountIndex?.stop();
+  });
   return server;
 }

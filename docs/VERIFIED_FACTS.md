@@ -161,7 +161,7 @@ Any experiment uses a fresh burner wallet. Wallet approvals on testnet are still
   - It is an EIP-1967 transparent proxy; implementation `0xba804df5c476e8eaef87bf8085f295300cce2a49` has `requestFunds(address)` `0x544c7cf9` and `token()` = AUSD.
   - **Verified 2026-10-08:** a `requestFunds(owner)` transaction sent 10,000 AUSD (tx `0x3ff12d42d1f27192bbd78fa9587fb21a5afafa4c0862bd72f5ed1a691603af0e`). Cooldown and limits unknown.
 - **`Exchange.increasePositionCollateral(uint256,uint256)`** has selector `0xf769f0d3`, the one in the current operator allowlist.
-  - The parameter order (perpId, amountCNS) is **UNVERIFIED**, so guardian top-ups stay off (`GUARDIAN_ADD_COLLATERAL=false`) until spike S2-bis.
+  - Parameter order (perpId, amountCNS): **verified 2026-10-10** (spike S2-bis below).
 - **ERC-8004 on Monad testnet** (repo `erc-8004/erc-8004-contracts`, testnet address set):
   - Identity Registry `0x8004A818BFB912233c491871b3d84c89A494BD9e` (`name()` "AgentIdentity").
   - Reputation Registry `0x8004B663056A597Dffe9eCcC1965A193B7388713`.
@@ -230,3 +230,12 @@ Burner DelegatedAccount `0xcE54…36cb`, accountId 1001, `EXECUTION_ENABLED=true
   - The side came from the worker's own log (`sideSource: worker-log`).
   - Afterwards the position had 0 lots and the balance was 99.896354, about 0.0036 AUSD of fees and spread for the round trip.
 - **Observation, not a rule:** this short position reported `positionType` 1. The on-chain `PositionEnum` is still undocumented, so the code keeps refusing to infer a side from it.
+
+## Verified 2026-10-10: spike S2-bis, `increasePositionCollateral(perpId, amountCNS)`
+The operator called it through the burner DelegatedAccount `0xcE54…36cb` (account 1001) on a fresh 0.002 ETH short.
+- `eth_call` with `(32, 1_000_000)` succeeds. With the order swapped, `(1_000_000, 32)`, it reverts with `0xc93c3644`.
+- The top-up of 1 AUSD succeeded: tx `0xfded79f1e7a4280431628f3bc36bf021be5a60209bc5582c9a958ddc3b696207`.
+  - The position's `depositCNS` went from 2.487890 to 3.487890 AUSD, exactly +1.
+  - The operator allowlist already grants `0xf769f0d3`.
+- Open tx `0xb84b0505…43d3`, close tx `0x0cdd7348…9f5b`. The whole probe cost 0.005 AUSD.
+- The VPS worker now runs with `GUARDIAN_ADD_COLLATERAL=true`.

@@ -25,7 +25,8 @@ import type { NextPage } from "next";
 import { type Address, formatEther, formatUnits, isAddress, parseEther, parseEventLogs, parseUnits } from "viem";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import { EXPLORER_TX, friendlyTxError, shortHex } from "~~/components/omni/format";
-import { loadDelegatedAccount, saveDelegatedAccount, worker } from "~~/lib/omni/worker";
+import { resolveDelegatedAccount } from "~~/lib/omni/account";
+import { saveDelegatedAccount, worker } from "~~/lib/omni/worker";
 import { publicClient, useMera } from "~~/services/mera/MeraProvider";
 
 type Status = {
@@ -104,8 +105,19 @@ const Onboard: NextPage = () => {
     // A different passkey is a different user: forget the previous one's balances and funding attempt.
     setStatus(undefined);
     setFundState("idle");
-    if (account) setDelegated(loadDelegatedAccount(account.address));
-  }, [account]);
+    setDelegated(undefined);
+    if (!account) return;
+    let cancelled = false;
+    void resolveDelegatedAccount(account.address).then(r => {
+      if (cancelled) return;
+      setDelegated(r?.address);
+      // Another browser (or cleared site data): the account was found on-chain instead of offering a duplicate.
+      if (r?.source === "chain") push(`cuenta de trading recuperada on-chain: ${r.address}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [account, push]);
 
   useEffect(() => {
     void refresh();
@@ -550,7 +562,7 @@ const Stat = ({ label, value, isHero = false }: { label: string; value: string; 
 const LogLine = ({ line }: { line: string }) => {
   const hash = line.match(/0x[0-9a-fA-F]{64}/)?.[0];
   const isFail = / falló|error|no disponible/.test(line);
-  const isDone = /confirmada|cuenta delegada:/.test(line);
+  const isDone = /confirmada|cuenta delegada:|recuperada/.test(line);
   const text = hash ? line.replace(hash, "") : line;
   return (
     <li className="flex items-start gap-2 text-xs">

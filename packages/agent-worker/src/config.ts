@@ -16,13 +16,24 @@ export type WorkerConfig = {
   indexerUrl?: string;
   /** Guardian tick period; 0 disables the loop (mandates are still accepted and stored). */
   guardianIntervalMs: number;
-  /** Allow collateral top-ups. Off until increasePositionCollateral is proven on testnet (S2-bis). */
+  /** Allow collateral top-ups (increasePositionCollateral, verified on testnet in spike S2-bis). */
   guardianAddCollateral: boolean;
   /** Perpl REST base, for the maintenance margins in /v1/pub/context. */
   perplApiUrl: string;
   /** Testnet gas station for brand-new passkey addresses; undefined (no GAS_STATION_PK) turns it off. */
   gasStation?: { pk: Hex; dripWei: bigint; dailyCap: number };
+  /**
+   * First block of the owner → DelegatedAccount index (factory events for this operator). Set it at or before the
+   * first account created with this operator; undefined (no ACCOUNT_INDEX_FROM_BLOCK) turns the index off.
+   */
+  accountIndexFromBlock?: bigint;
 };
+
+function loadAccountIndexFromBlock(raw: string | undefined): bigint | undefined {
+  if (!raw) return undefined;
+  if (!/^\d+$/.test(raw)) throw new Error("ACCOUNT_INDEX_FROM_BLOCK must be a block number");
+  return BigInt(raw);
+}
 
 /** Parses GAS_STATION_* settings. The station key must differ from the operator's: separate roles, separate funds. */
 function loadGasStation(env: Record<string, string | undefined>, operatorPk: string): WorkerConfig["gasStation"] {
@@ -68,5 +79,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     guardianAddCollateral: env.GUARDIAN_ADD_COLLATERAL === "true",
     perplApiUrl: env.PERPL_API_URL || "https://testnet.perpl.xyz/api",
     gasStation: loadGasStation(env, operatorPk),
+    accountIndexFromBlock: loadAccountIndexFromBlock(env.ACCOUNT_INDEX_FROM_BLOCK),
   };
 }

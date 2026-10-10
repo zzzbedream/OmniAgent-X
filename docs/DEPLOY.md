@@ -23,6 +23,7 @@ docker run -d -p 8787:8787 -v omniagent-data:/data --env-file packages/agent-wor
 | `MONAD_TESTNET_RPC` | Your own RPC (e.g. the QuickNode voucher) is preferable to the public one |
 | `DATA_DIR` | `/data` (the image default). **Mount a persistent volume**: the log also holds used approval nonces |
 | `GAS_STATION_PK` | Optional. **Secret**, not the operator key. Funds brand-new passkey addresses: a new address has 0 MON and cannot send its first onboarding transaction. Without it, `POST /onboard/fund` answers 503 |
+| `ACCOUNT_INDEX_FROM_BLOCK` | Optional. First block of the owner → DelegatedAccount index. Use a block at or before the first account created with this operator. The index scans the factory's `DelegatedAccountCreated` events for our operator in 100-block windows, because the public RPC caps `eth_getLogs` at 100 blocks. It serves `GET /accounts?owner=`, and the PWA uses it to recover the trading account on a browser that did not create it |
 | `GAS_DRIP_MON` / `GAS_DAILY_CAP` | MON per new address (default 0.5) and fundings per UTC day (default 40). Each address is funded once; the list lives in `DATA_DIR/gas-station.json` |
 
 Hosting options (all provide HTTPS; free tiers and limits unverified):

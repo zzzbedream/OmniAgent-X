@@ -23,7 +23,8 @@ import { type DecisionEntry, type GuardianActionType, GuardianFeed } from "~~/ap
 import { GuardianStatusCard } from "~~/app/guardian/_components/GuardianStatusCard";
 import { MandatePreview } from "~~/app/guardian/_components/MandatePreview";
 import { ShockSimulator } from "~~/app/guardian/_components/ShockSimulator";
-import { type GuardianStatus, WORKER_URL, loadDelegatedAccount, worker } from "~~/lib/omni/worker";
+import { resolveDelegatedAccount } from "~~/lib/omni/account";
+import { type GuardianStatus, WORKER_URL, worker } from "~~/lib/omni/worker";
 import { useMera } from "~~/services/mera/MeraProvider";
 
 const EXAMPLE =
@@ -51,7 +52,12 @@ const Guardian: NextPage = () => {
   const [err, setErr] = useState<string>();
 
   useEffect(() => {
-    if (account) setDelegated(loadDelegatedAccount(account.address));
+    if (!account) return;
+    let cancelled = false;
+    void resolveDelegatedAccount(account.address).then(r => !cancelled && setDelegated(r?.address));
+    return () => {
+      cancelled = true;
+    };
   }, [account]);
 
   useEffect(() => {
