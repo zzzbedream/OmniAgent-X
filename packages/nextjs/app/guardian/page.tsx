@@ -27,6 +27,22 @@ import { resolveDelegatedAccount } from "~~/lib/omni/account";
 import { type GuardianStatus, WORKER_URL, worker } from "~~/lib/omni/worker";
 import { useMera } from "~~/services/mera/MeraProvider";
 
+/**
+ * One-tap rule sets. "Demo" fires on the next tick for any position up to 3x (whose distance to liquidation is
+ * well under 50%), so a collateral top-up can be shown live; the others are realistic protections.
+ */
+const RULE_PRESETS = [
+  {
+    label: "Conservador",
+    text: "Si mi distancia a liquidación baja de 15%, agrega 20 USD de colateral. Si baja de 8%, reduce la mitad. Si baja de 4%, cierra todo.",
+  },
+  {
+    label: "Demo: recarga inmediata",
+    text: "Si la distancia a liquidación baja de 50%, agrega 2 USD de colateral. Si baja de 5%, cierra la posición.",
+  },
+  { label: "Solo cerrar", text: "Si la distancia a liquidación baja de 10%, cierra la posición." },
+] as const;
+
 const EXAMPLE =
   "Si mi distancia a liquidación baja de 15%, agrega 20 USD de colateral. Si baja de 8%, reduce la mitad. Si baja de 4%, cierra todo.";
 const TTL_OPTIONS = [1, 7, 30] as const;
@@ -219,6 +235,22 @@ const Guardian: NextPage = () => {
           onChange={e => setText(e.target.value)}
         />
       </label>
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+        {RULE_PRESETS.map(p => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => setText(p.text)}
+            className={`shrink-0 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+              text === p.text
+                ? "border-violet bg-violet-wash text-bone"
+                : "border-line bg-raised text-ash hover:border-violet hover:text-bone"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
       <button className="btn btn-primary" disabled={!canSign || text.trim().length < 5} onClick={compile}>
         {busy === "compile" ? "Traduciendo…" : "Traducir reglas"}
       </button>

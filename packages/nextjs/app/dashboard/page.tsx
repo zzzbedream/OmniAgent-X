@@ -313,10 +313,27 @@ const Dashboard: NextPage = () => {
                     <Cell label="Tamaño" value={fmt(m?.size, 6)} />
                     <Cell label="Entrada" value={fmt(m?.entryPrice)} />
                     <Cell label="Mark" value={`${fmt(m?.markPrice)}${p.markPriceValid ? "" : " ⚠"}`} />
-                    <Cell label="Colateral" value={fmt(m?.collateralUsd)} />
                     <Cell label="Apal. efectivo" value={m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"} />
                     <Cell label="Liq. est." value={fmt(m?.estLiquidationPrice)} tone="amber" />
                   </dl>
+                  {/* What the guardian protects and tops up: collateral in the position and distance to liquidation. */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-0.5 rounded-md border border-violet/30 bg-violet-wash px-3 py-2">
+                      <span className="label-caps">Colateral en la posición</span>
+                      <span className="num text-lg font-semibold">
+                        {fmt(m?.collateralUsd)} <span className="text-xs text-smoke">AUSD</span>
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 rounded-md border border-line bg-raised px-3 py-2">
+                      <span className="label-caps">Distancia a liquidación</span>
+                      <span className="num text-lg font-semibold text-amber">
+                        {/* Same value the guardian's "distancia a liquidación" rule compares. */}
+                        {m?.maintenanceBufferPct === null || m?.maintenanceBufferPct === undefined
+                          ? "—"
+                          : `${fmt(m.maintenanceBufferPct, 1)}%`}
+                      </span>
+                    </div>
+                  </div>
                   {canClose && (
                     <button
                       className="btn btn-outline btn-sm border-short/50 text-short hover:border-short hover:bg-short/10"
