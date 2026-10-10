@@ -87,11 +87,11 @@ describe("describe", () => {
     collateralBudgetUsd: 20,
   };
 
-  it("renders every rule in plain Spanish", () => {
+  it("renders every rule in plain English", () => {
     const lines = describeMandate(m);
-    expect(lines[0]).toBe("Si la distancia a liquidación baja de 15%: agregar 20 USD de colateral.");
-    expect(lines[1]).toBe("Si la pérdida llega a 30% del colateral: reducir la posición 50%.");
-    expect(lines[2]).toBe("Si el apalancamiento supera 8x: cerrar la posición.");
+    expect(lines[0]).toBe("If distance to liquidation falls below 15%: add 20 USD of collateral.");
+    expect(lines[1]).toBe("If the loss reaches 30% of collateral: reduce the position by 50%.");
+    expect(lines[2]).toBe("If leverage exceeds 8x: close the position.");
   });
 
   it("explains an action with the observed value, in dry-run or live voice", () => {
@@ -103,10 +103,10 @@ describe("describe", () => {
       hit: { trigger: { kind: "liquidationBuffer" as const, belowPct: 8 }, observed: 7.25 },
     };
     expect(describeGuardianAction(action, { dryRun: false })).toBe(
-      "BTC: reduje la posición 50% porque la distancia a liquidación (7.3%) bajó de 8%.",
+      "BTC: reduced the position by 50% because distance to liquidation (7.3%) fell below 8%.",
     );
     expect(describeGuardianAction(action, { dryRun: true })).toBe(
-      "BTC: reduciría la posición 50% porque la distancia a liquidación (7.3%) bajó de 8%.",
+      "BTC: would reduce the position by 50% because distance to liquidation (7.3%) fell below 8%.",
     );
   });
 });

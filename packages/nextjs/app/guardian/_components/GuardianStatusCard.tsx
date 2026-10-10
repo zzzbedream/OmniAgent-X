@@ -13,7 +13,7 @@ export function GuardianStatusCard({ status, isRevoking, onRevoke }: Props) {
   if (!status.active) {
     return (
       <p className="rounded-md border border-line bg-raised px-3 py-2 text-sm text-ash">
-        El guardián no está activo en esta cuenta. Escribe tus reglas abajo para activarlo.
+        The guardian is not active on this account. Write your rules below to activate it.
       </p>
     );
   }
@@ -21,9 +21,9 @@ export function GuardianStatusCard({ status, isRevoking, onRevoke }: Props) {
   return (
     <section className="panel p-4 gap-3 border border-long/40">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold">Guardián activo</h2>
+        <h2 className="font-semibold">Guardian active</h2>
         <span className={status.mode === "live" ? "chip-live" : "chip-sim"}>
-          {status.mode === "live" ? "en vivo" : "simulación (no envía transacciones)"}
+          {status.mode === "live" ? "live" : "simulation (sends no transactions)"}
         </span>
       </div>
       <ol className="list-decimal pl-5 text-sm flex flex-col gap-1">
@@ -32,13 +32,13 @@ export function GuardianStatusCard({ status, isRevoking, onRevoke }: Props) {
         ))}
       </ol>
       <p className="text-xs text-smoke">
-        Vence {status.expiresAt ? time(status.expiresAt) : "—"} · acciones hoy: {status.state?.actionsToday ?? 0}/
-        {status.mandate?.maxActionsPerDay ?? "—"} · colateral usado: {status.state?.collateralAddedUsd ?? 0}/
+        Expires {status.expiresAt ? time(status.expiresAt) : "—"} · actions today: {status.state?.actionsToday ?? 0}/
+        {status.mandate?.maxActionsPerDay ?? "—"} · collateral used: {status.state?.collateralAddedUsd ?? 0}/
         {status.mandate?.collateralBudgetUsd ?? 0} USD
       </p>
       {tick && (
         <div className="text-xs flex flex-col gap-1">
-          <span className="text-smoke">Última revisión: {time(tick.at)}</span>
+          <span className="text-smoke">Last check: {time(tick.at)}</span>
           {tick.error && <span className="text-short">{tick.error}</span>}
           {tick.skipped.map(s => (
             <span key={s.market}>
@@ -48,7 +48,7 @@ export function GuardianStatusCard({ status, isRevoking, onRevoke }: Props) {
         </div>
       )}
       <button className="btn btn-outline btn-error btn-sm self-start" disabled={isRevoking} onClick={onRevoke}>
-        {isRevoking ? "Firmando…" : "Revocar con passkey"}
+        {isRevoking ? "Signing…" : "Revoke with passkey"}
       </button>
     </section>
   );

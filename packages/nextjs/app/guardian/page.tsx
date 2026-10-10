@@ -33,18 +33,18 @@ import { useMera } from "~~/services/mera/MeraProvider";
  */
 const RULE_PRESETS = [
   {
-    label: "Conservador",
-    text: "Si mi distancia a liquidación baja de 15%, agrega 20 USD de colateral. Si baja de 8%, reduce la mitad. Si baja de 4%, cierra todo.",
+    label: "Conservative",
+    text: "If my distance to liquidation falls below 15%, add 20 USD of collateral. Below 8%, reduce by half. Below 4%, close everything.",
   },
   {
-    label: "Demo: recarga inmediata",
-    text: "Si la distancia a liquidación baja de 50%, agrega 2 USD de colateral. Si baja de 5%, cierra la posición.",
+    label: "Demo: instant top-up",
+    text: "If distance to liquidation falls below 50%, add 2 USD of collateral. Below 5%, close the position.",
   },
-  { label: "Solo cerrar", text: "Si la distancia a liquidación baja de 10%, cierra la posición." },
+  { label: "Close only", text: "If distance to liquidation falls below 10%, close the position." },
 ] as const;
 
 const EXAMPLE =
-  "Si mi distancia a liquidación baja de 15%, agrega 20 USD de colateral. Si baja de 8%, reduce la mitad. Si baja de 4%, cierra todo.";
+  "If my distance to liquidation falls below 15%, add 20 USD of collateral. Below 8%, reduce by half. Below 4%, close everything.";
 const TTL_OPTIONS = [1, 7, 30] as const;
 const POLL_MS = 10_000;
 const AGENT_ID = /^\d+$/.test(process.env.NEXT_PUBLIC_GUARDIAN_AGENT_ID ?? "")
@@ -95,7 +95,7 @@ const Guardian: NextPage = () => {
   useEffect(() => {
     if (!delegated) return;
     let cancelled = false;
-    const load = () => refresh().catch(e => !cancelled && setErr(`agente: ${(e as Error).message}`));
+    const load = () => refresh().catch(e => !cancelled && setErr(`agent: ${(e as Error).message}`));
     load();
     const id = setInterval(load, POLL_MS);
     return () => {
@@ -118,7 +118,7 @@ const Guardian: NextPage = () => {
 
   const compile = () =>
     guarded("compile", async () => {
-      if (!account || !walletClient || !delegated) throw new Error("inicia sesión y crea tu cuenta de trading primero");
+      if (!account || !walletClient || !delegated) throw new Error("sign in and create your trading account first");
       setCompiled(undefined);
       // Authenticates the paid compile call, bound to this exact text, valid 4 minutes.
       const deadline = nowSec() + 240n;
@@ -200,25 +200,25 @@ const Guardian: NextPage = () => {
 
   return (
     <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6">
-      <h1 className="text-[28px] font-bold tracking-tight">Guardián</h1>
+      <h1 className="text-[28px] font-bold tracking-tight">Guardian</h1>
       <p className="text-sm text-ash">
-        Dile al agente cómo protegerte. Firmas una vez con tu passkey y vigila tus posiciones cada pocos segundos: puede
-        reducir o cerrar, nunca retirar tus fondos.
+        Tell the agent how to protect you. You sign once with your passkey and it watches your positions every few
+        seconds: it can add collateral, reduce or close, never withdraw your funds.
       </p>
       {!account && (
         <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
-          Primero inicia sesión con tu passkey en{" "}
+          First sign in with your passkey in{" "}
           <Link className="link" href="/onboard">
-            Cuenta
+            Account
           </Link>
           .
         </p>
       )}
       {account && !delegated && (
         <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
-          Aún no tienes cuenta de trading.{" "}
+          You have no trading account yet.{" "}
           <Link className="link" href="/onboard">
-            Créala aquí
+            Create it here
           </Link>
           .
         </p>
@@ -227,7 +227,7 @@ const Guardian: NextPage = () => {
       {status && <GuardianStatusCard status={status} isRevoking={busy === "revoke"} onRevoke={revoke} />}
 
       <label className="form-control gap-1">
-        <span className="text-sm">Tus reglas de protección</span>
+        <span className="text-sm">Your protection rules</span>
         <textarea
           className="textarea textarea-bordered w-full bg-raised h-28"
           value={text}
@@ -252,7 +252,7 @@ const Guardian: NextPage = () => {
         ))}
       </div>
       <button className="btn btn-primary" disabled={!canSign || text.trim().length < 5} onClick={compile}>
-        {busy === "compile" ? "Traduciendo…" : "Traducir reglas"}
+        {busy === "compile" ? "Translating…" : "Translate rules"}
       </button>
 
       {err && <p className="text-short text-sm break-words">{err}</p>}
@@ -261,7 +261,7 @@ const Guardian: NextPage = () => {
         <>
           <MandatePreview compiled={compiled} addCollateralEnabled={status?.guardian.addCollateralEnabled} />
           <label className="form-control gap-1">
-            <span className="text-sm">Vigencia del mandato</span>
+            <span className="text-sm">Mandate validity</span>
             <select
               className="select select-bordered w-full bg-raised"
               value={ttlDays}
@@ -269,17 +269,17 @@ const Guardian: NextPage = () => {
             >
               {TTL_OPTIONS.map(d => (
                 <option key={d} value={d}>
-                  {d === 1 ? "1 día" : `${d} días`}
+                  {d === 1 ? "1 day" : `${d} days`}
                 </option>
               ))}
             </select>
           </label>
           <button className="btn btn-primary h-12" disabled={!canSign || blocked} onClick={activate}>
             {busy === "activate"
-              ? "Firmando…"
+              ? "Signing…"
               : status?.active
-                ? "Reemplazar mandato con passkey"
-                : "Activar con passkey"}
+                ? "Replace mandate with passkey"
+                : "Activate with passkey"}
           </button>
         </>
       )}
@@ -287,7 +287,7 @@ const Guardian: NextPage = () => {
       <ShockSimulator mandate={compiled?.mandate ?? status?.mandate} maintenanceFraction={maintenance} />
 
       <section className="flex flex-col gap-2 pb-10">
-        <h2 className="font-semibold">Historial del guardián</h2>
+        <h2 className="font-semibold">Guardian history</h2>
         <GuardianFeed entries={feed} onRate={AGENT_ID !== undefined && walletClient ? rate : undefined} />
       </section>
     </div>

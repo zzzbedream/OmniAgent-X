@@ -48,11 +48,11 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
   const run = () => {
     setErr(undefined);
     try {
-      if (!mandate) throw new Error("primero traduce o activa un mandato");
+      if (!mandate) throw new Error("first translate or activate a mandate");
       const n = Number(notional);
       const c = Number(collateral);
       const shock = Number(shockPct) / 100;
-      if (!(n > 0 && c > 0 && shock > 0 && shock < 0.9)) throw new Error("revisa los valores (shock entre 0 y 90%)");
+      if (!(n > 0 && c > 0 && shock > 0 && shock < 0.9)) throw new Error("check the values (shock between 0 and 90%)");
       const direction = side === "long" ? -1 : 1; // adverse move
       const count = 10;
       const path = Array.from({ length: count }, (_, i) => (direction * shock * (i + 1)) / count);
@@ -73,27 +73,26 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
 
   return (
     <section className="panel p-4 gap-3">
-      <h2 className="font-semibold">Simular un shock</h2>
+      <h2 className="font-semibold">Simulate a shock</h2>
       <p className="text-xs text-smoke">
-        Posición hipotética en BTC (precio de referencia {REFERENCE_PRICE.toLocaleString()} USD). Margen de
-        mantenimiento {(mm * 100).toFixed(2)}%
-        {maintenanceFraction === null ? " (supuesto: Perpl no respondió)" : " (de Perpl)"}. Es una estimación: ignora
-        funding y fees, y al reducir deja el colateral en la posición más chica.
+        Hypothetical BTC position (reference price {REFERENCE_PRICE.toLocaleString()} USD). Maintenance margin{" "}
+        {(mm * 100).toFixed(2)}%{maintenanceFraction === null ? " (assumed: Perpl did not answer)" : " (from Perpl)"}.
+        An estimate: it ignores funding and fees, and a reduction leaves the collateral in the smaller position.
       </p>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <label className="form-control">
-          <span>Lado</span>
+          <span>Side</span>
           <select
             className="select select-bordered w-full bg-raised select-sm"
             value={side}
             onChange={e => setSide(e.target.value as "long" | "short")}
           >
-            <option value="long">Largo</option>
-            <option value="short">Corto</option>
+            <option value="long">Long</option>
+            <option value="short">Short</option>
           </select>
         </label>
         <label className="form-control">
-          <span>Shock en contra (%)</span>
+          <span>Adverse shock (%)</span>
           <input
             className="input input-bordered input-sm"
             inputMode="decimal"
@@ -102,7 +101,7 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
           />
         </label>
         <label className="form-control">
-          <span>Nocional (USD)</span>
+          <span>Notional (USD)</span>
           <input
             className="input input-bordered input-sm"
             inputMode="decimal"
@@ -111,7 +110,7 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
           />
         </label>
         <label className="form-control">
-          <span>Colateral (USD)</span>
+          <span>Collateral (USD)</span>
           <input
             className="input input-bordered input-sm"
             inputMode="decimal"
@@ -121,7 +120,7 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
         </label>
       </div>
       <button className="btn btn-outline btn-sm self-start border-line" disabled={!mandate} onClick={run}>
-        Simular
+        Simulate
       </button>
       {err && <p className="text-short text-sm">{err}</p>}
       {steps && (
@@ -129,12 +128,12 @@ export function ShockSimulator({ mandate, maintenanceFraction }: Props) {
           {steps.map(s => (
             <li key={s.t}>
               <span className="text-smoke">
-                {(s.move * 100).toFixed(1)}% → {s.markPrice.toLocaleString()} USD · distancia{" "}
+                {(s.move * 100).toFixed(1)}% → {s.markPrice.toLocaleString()} USD · distance{" "}
                 {s.bufferPct === null ? "—" : `${s.bufferPct.toFixed(1)}%`}:{" "}
               </span>
               {s.action
                 ? describeGuardianAction(s.action, { dryRun: true })
-                : s.skipped.map(k => SKIP_REASON_TEXT[k.reason]).join("; ") || "sin acción"}
+                : s.skipped.map(k => SKIP_REASON_TEXT[k.reason]).join("; ") || "no action"}
             </li>
           ))}
         </ol>

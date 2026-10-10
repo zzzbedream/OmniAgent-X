@@ -31,15 +31,15 @@ export const OrderTicket = ({
           <span className="num text-[11px] text-smoke">
             TICKET {String(index + 1).padStart(2, "0")} · {order.market}-PERP · IOC
           </span>
-          <span className={isLong ? "chip-long" : "chip-short"}>{isLong ? "Largo" : "Corto"}</span>
+          <span className={isLong ? "chip-long" : "chip-short"}>{isLong ? "Long" : "Short"}</span>
         </div>
         <p className={`num text-3xl font-semibold tracking-tight ${isLong ? "text-long" : "text-short"}`}>
-          {isLong ? "LARGO" : "CORTO"} <span className="text-bone">{order.market}</span>
+          {isLong ? "LONG" : "SHORT"} <span className="text-bone">{order.market}</span>
         </p>
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Nocional" value={`${fmtUsd(order.notionalUsd)} USD`} />
-          <Field label="Apalanc." value={`${order.leverage}x`} />
-          <Field label="Margen" value={`${fmtUsd(order.notionalUsd / order.leverage)} USD`} />
+          <Field label="Notional" value={`${fmtUsd(order.notionalUsd)} USD`} />
+          <Field label="Leverage" value={`${order.leverage}x`} />
+          <Field label="Margin" value={`${fmtUsd(order.notionalUsd / order.leverage)} USD`} />
         </div>
       </div>
       {children && (

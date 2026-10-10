@@ -84,7 +84,7 @@ export async function confirmMeraAccount(account: MeraEvmAccount): Promise<void>
   prfOutput.fill(0);
   derived.session.end();
   if (derived.address.toLowerCase() !== account.address.toLowerCase()) {
-    throw new Error("Esa passkey no corresponde a la cuenta con la que iniciaste sesión.");
+    throw new Error("That passkey does not match the account you signed in with.");
   }
 }
 

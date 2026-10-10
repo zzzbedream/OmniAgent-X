@@ -205,7 +205,7 @@ const Dashboard: NextPage = () => {
       );
       const r = await worker.close({ approval: { message: wire, signature } });
       setCloseResult(
-        `${p.market}: ${String(r.mode)} · ${String(r.status)} · lado ${String(r.side)} (${String(r.sideSource)})` +
+        `${p.market}: ${String(r.mode)} · ${String(r.status)} · side ${String(r.side)} (${String(r.sideSource)})` +
           (r.txHash ? ` · tx ${String(r.txHash)}` : "") +
           (r.error ? ` · ${String(r.error)}` : ""),
       );
@@ -236,49 +236,47 @@ const Dashboard: NextPage = () => {
     <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6 lg:max-w-5xl">
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[28px] font-bold tracking-tight">Riesgo</h1>
-          <p className="text-sm text-ash">
-            Posiciones leídas on-chain, precios en vivo de Perpl y lo que hizo el agente.
-          </p>
+          <h1 className="text-[28px] font-bold tracking-tight">Risk</h1>
+          <p className="text-sm text-ash">Positions read on-chain, live Perpl prices, and what the agent did.</p>
         </div>
         <span className="num flex items-center gap-1.5 text-[11px] text-smoke">
           <span
             className={`h-1.5 w-1.5 rounded-full ${market.status === "open" ? "animate-pulse bg-long" : "bg-amber"}`}
             aria-hidden
           />
-          WS {market.status} · bloque {market.headBlock ?? "—"}
+          WS {market.status} · block {market.headBlock ?? "—"}
           {staleSec !== null && ` · ${staleSec}s`}
         </span>
       </header>
-      {market.subErrors.length > 0 && <p className="text-sm text-short">Suscripción: {market.subErrors.join("; ")}</p>}
-      {contextError && <p className="text-sm text-amber">Config de mercados no disponible: {contextError}</p>}
+      {market.subErrors.length > 0 && <p className="text-sm text-short">Subscription: {market.subErrors.join("; ")}</p>}
+      {contextError && <p className="text-sm text-amber">Market config unavailable: {contextError}</p>}
 
       <input
         className="input input-bordered input-sm num w-full bg-raised"
-        placeholder="Dirección de DelegatedAccount (o inicia sesión en Cuenta)"
+        placeholder="DelegatedAccount address (or sign in under Account)"
         defaultValue={target}
         onBlur={e => isAddress(e.target.value) && setTarget(e.target.value)}
-        aria-label="Cuenta a monitorear"
+        aria-label="Account to watch"
       />
-      {readError && <p className="text-sm text-short">Lectura on-chain falló: {readError}</p>}
+      {readError && <p className="text-sm text-short">On-chain read failed: {readError}</p>}
 
       {view && (
-        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Resumen de la cuenta">
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Account summary">
           <div className="panel col-span-2 flex flex-col justify-between gap-3 p-4 lg:row-span-2">
-            <span className="label-caps">PnL no realizado (est.)</span>
+            <span className="label-caps">Unrealized PnL (est.)</span>
             <span className={`num text-[40px] font-semibold leading-none tracking-tight ${signTone(pnl)}`}>
               {signed(pnl)} <span className="text-base text-smoke">USD</span>
             </span>
             <span className="num text-xs text-smoke">
-              {rows.length} {rows.length === 1 ? "posición" : "posiciones"} · leído{" "}
+              {rows.length} {rows.length === 1 ? "position" : "positions"} · read{" "}
               {new Date(view.readAt).toLocaleTimeString()}
             </span>
           </div>
-          <Tile label="Balance exchange" value={coll(view.balanceCNS)} />
-          <Tile label="Bloqueado" value={coll(view.lockedBalanceCNS)} />
-          <Tile label="Largo / corto" value={`${fmt(summary.longNotionalUsd)} / ${fmt(summary.shortNotionalUsd)}`} />
+          <Tile label="Exchange balance" value={coll(view.balanceCNS)} />
+          <Tile label="Locked" value={coll(view.lockedBalanceCNS)} />
+          <Tile label="Long / short" value={`${fmt(summary.longNotionalUsd)} / ${fmt(summary.shortNotionalUsd)}`} />
           <Tile
-            label="Colchón vs MM (est.)"
+            label="Buffer vs MM (est.)"
             value={summary.minMaintenanceBufferPct === null ? "—" : `${fmt(summary.minMaintenanceBufferPct)} pp`}
             tone={isBufferLow ? "short" : undefined}
           />
@@ -286,10 +284,10 @@ const Dashboard: NextPage = () => {
       )}
 
       {view && (
-        <section className="flex flex-col gap-2" aria-label="Posiciones">
-          <h2 className="label-caps">Posiciones</h2>
+        <section className="flex flex-col gap-2" aria-label="Positions">
+          <h2 className="label-caps">Positions</h2>
           {rows.length === 0 ? (
-            <p className="panel p-4 text-sm text-ash">Sin posiciones abiertas.</p>
+            <p className="panel p-4 text-sm text-ash">No open positions.</p>
           ) : (
             rows.map(({ p, side, metrics: m, decimalsMismatch }) => {
               const rowPnl = m?.unrealizedPnlUsd;
@@ -299,35 +297,35 @@ const Dashboard: NextPage = () => {
                     <span className="flex items-center gap-2">
                       <span className="num font-semibold">{p.market}-PERP</span>
                       {side === "long" ? (
-                        <span className="chip-long">Largo</span>
+                        <span className="chip-long">Long</span>
                       ) : side === "short" ? (
-                        <span className="chip-short">Corto</span>
+                        <span className="chip-short">Short</span>
                       ) : (
-                        <span className="chip-muted">Lado ? (raw {p.positionTypeRaw})</span>
+                        <span className="chip-muted">Side ? (raw {p.positionTypeRaw})</span>
                       )}
-                      {decimalsMismatch && <span className="chip-sim">decimales</span>}
+                      {decimalsMismatch && <span className="chip-sim">decimals</span>}
                     </span>
                     <span className={`num text-lg font-semibold ${signTone(rowPnl)}`}>{signed(rowPnl)}</span>
                   </header>
                   <dl className="num grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
-                    <Cell label="Tamaño" value={fmt(m?.size, 6)} />
-                    <Cell label="Entrada" value={fmt(m?.entryPrice)} />
+                    <Cell label="Size" value={fmt(m?.size, 6)} />
+                    <Cell label="Entry" value={fmt(m?.entryPrice)} />
                     <Cell label="Mark" value={`${fmt(m?.markPrice)}${p.markPriceValid ? "" : " ⚠"}`} />
-                    <Cell label="Apal. efectivo" value={m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"} />
-                    <Cell label="Liq. est." value={fmt(m?.estLiquidationPrice)} tone="amber" />
+                    <Cell label="Eff. leverage" value={m?.effectiveLeverage ? `${fmt(m.effectiveLeverage)}x` : "—"} />
+                    <Cell label="Est. liq." value={fmt(m?.estLiquidationPrice)} tone="amber" />
                   </dl>
                   {/* What the guardian protects and tops up: collateral in the position and distance to liquidation. */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-0.5 rounded-md border border-violet/30 bg-violet-wash px-3 py-2">
-                      <span className="label-caps">Colateral en la posición</span>
+                      <span className="label-caps">Collateral in position</span>
                       <span className="num text-lg font-semibold">
                         {fmt(m?.collateralUsd)} <span className="text-xs text-smoke">AUSD</span>
                       </span>
                     </div>
                     <div className="flex flex-col gap-0.5 rounded-md border border-line bg-raised px-3 py-2">
-                      <span className="label-caps">Distancia a liquidación</span>
+                      <span className="label-caps">Distance to liquidation</span>
                       <span className="num text-lg font-semibold text-amber">
-                        {/* Same value the guardian's "distancia a liquidación" rule compares. */}
+                        {/* Same value the guardian's "distance to liquidation" rule compares. */}
                         {m?.maintenanceBufferPct === null || m?.maintenanceBufferPct === undefined
                           ? "—"
                           : `${fmt(m.maintenanceBufferPct, 1)}%`}
@@ -340,7 +338,7 @@ const Dashboard: NextPage = () => {
                       disabled={!!closing}
                       onClick={() => closePosition(p)}
                     >
-                      {closing === p.market ? "Confirma con tu huella…" : "Cerrar con passkey"}
+                      {closing === p.market ? "Confirm with your fingerprint…" : "Close with passkey"}
                     </button>
                   )}
                 </article>
@@ -351,21 +349,21 @@ const Dashboard: NextPage = () => {
             <p className="num rounded-md border border-line bg-raised p-3 text-xs break-all text-ash">{closeResult}</p>
           )}
           <p className="text-[11px] text-smoke">
-            Estimaciones sin funding ni fees; Perpl no publica su fórmula de margen. MM = 100 / maintenance_margin según
-            los ejemplos de la documentación. El lado sale del indexador o del log del worker que abrió la posición;
-            nunca se adivina.
+            Estimates exclude funding and fees; Perpl does not publish its margin formula. MM = 100 / maintenance_margin
+            per the documentation&apos;s examples. The side comes from the indexer or from the log of the worker that
+            opened the position; it is never guessed.
           </p>
         </section>
       )}
 
-      <section className="panel flex flex-col gap-2 overflow-x-auto p-4" aria-label="Mercados">
-        <h2 className="label-caps">Mercados · Perpl testnet en vivo</h2>
+      <section className="panel flex flex-col gap-2 overflow-x-auto p-4" aria-label="Markets">
+        <h2 className="label-caps">Markets · Perpl testnet live</h2>
         <table className="num w-full whitespace-nowrap text-sm">
           <thead>
             <tr className="text-left text-[11px] text-smoke">
-              <th className="py-1.5 font-medium">Mercado</th>
+              <th className="py-1.5 font-medium">Market</th>
               <th className="py-1.5 font-medium">Mark</th>
-              <th className="hidden py-1.5 font-medium sm:table-cell">Mark−orác.</th>
+              <th className="hidden py-1.5 font-medium sm:table-cell">Mark−oracle</th>
               <th className="py-1.5 font-medium">Spread</th>
               <th className="py-1.5 font-medium">24h</th>
               <th className="py-1.5 font-medium">MM</th>
@@ -402,12 +400,12 @@ const Dashboard: NextPage = () => {
         </table>
       </section>
 
-      <section className="panel flex flex-col gap-3 p-4" aria-label="Decisiones del agente">
-        <h2 className="label-caps">Decisiones del agente</h2>
+      <section className="panel flex flex-col gap-3 p-4" aria-label="Agent decisions">
+        <h2 className="label-caps">Agent decisions</h2>
         {!decisions ? (
-          <p className="text-sm text-ash">Worker no disponible.</p>
+          <p className="text-sm text-ash">Worker unavailable.</p>
         ) : decisions.length === 0 ? (
-          <p className="text-sm text-ash">Sin decisiones para esta cuenta.</p>
+          <p className="text-sm text-ash">No decisions for this account.</p>
         ) : (
           <ol className="flex flex-col">
             {decisions.slice(0, 10).map((d, i) => (
@@ -426,7 +424,7 @@ const Dashboard: NextPage = () => {
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="text-sm font-medium">{String(d.kind)}</span>
                     <span className={d.mode === "live" ? "chip-live" : "chip-sim"}>
-                      {d.mode === "live" ? "En vivo" : "Simulación"}
+                      {d.mode === "live" ? "Live" : "Simulation"}
                     </span>
                     <span className="chip-muted">{String(d.status)}</span>
                   </span>
@@ -440,10 +438,10 @@ const Dashboard: NextPage = () => {
         )}
       </section>
 
-      <section className="panel flex flex-col gap-2 p-4" aria-label="Historial indexado">
-        <h2 className="label-caps">Historial · Envio</h2>
+      <section className="panel flex flex-col gap-2 p-4" aria-label="Indexed history">
+        <h2 className="label-caps">History · Envio</h2>
         {!INDEXER_URL ? (
-          <p className="text-sm text-ash">Indexador no configurado (NEXT_PUBLIC_INDEXER_URL).</p>
+          <p className="text-sm text-ash">Indexer not configured (NEXT_PUBLIC_INDEXER_URL).</p>
         ) : indexerError ? (
           <p className="text-sm text-short">{indexerError}</p>
         ) : (
@@ -455,7 +453,7 @@ const Dashboard: NextPage = () => {
                 {e.perpId ? ` · perp ${e.perpId}` : ""} · {e.txHash.slice(0, 10)}…
               </li>
             ))}
-            {indexed?.events.length === 0 && <li>Sin eventos indexados.</li>}
+            {indexed?.events.length === 0 && <li>No indexed events.</li>}
           </ul>
         )}
       </section>

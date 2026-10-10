@@ -1,6 +1,6 @@
 import { CheckIcon } from "@heroicons/react/24/solid";
 
-export const PIPELINE_STEPS = ["Instrucción", "Plan IA", "Reglas", "Passkey", "Ejecución"] as const;
+export const PIPELINE_STEPS = ["Intent", "AI plan", "Rules", "Passkey", "Execution"] as const;
 
 type Props = {
   /** Index of the step in progress; steps before it are done. PIPELINE_STEPS.length means all done. */

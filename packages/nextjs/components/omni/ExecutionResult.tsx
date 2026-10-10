@@ -7,10 +7,10 @@ type ExecutedOrder = { order?: WireOrder; txHash?: string; error?: string; simul
 type Execution = { mode?: string; status?: string; orders?: ExecutedOrder[]; error?: string };
 
 const STATUS_LABEL: Record<string, string> = {
-  built: "Orden construida",
-  sent: "Enviada a Perpl",
-  partial: "Enviada en parte",
-  failed: "Falló",
+  built: "Order built",
+  sent: "Sent to Perpl",
+  partial: "Partly sent",
+  failed: "Failed",
 };
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -26,11 +26,11 @@ export const ExecutionResult = ({ execution }: { execution: Record<string, unkno
   const isLive = ex.mode === "live";
   const status = ex.status ?? "";
   return (
-    <section className="panel flex flex-col gap-3 p-4" aria-label="Resultado del agente">
+    <section className="panel flex flex-col gap-3 p-4" aria-label="Agent result">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Resultado del agente</h3>
+        <h3 className="text-sm font-semibold">Agent result</h3>
         <div className="flex gap-2">
-          <span className={isLive ? "chip-live" : "chip-sim"}>{isLive ? "En vivo" : "Simulación"}</span>
+          <span className={isLive ? "chip-live" : "chip-sim"}>{isLive ? "Live" : "Simulation"}</span>
           <span className={status === "failed" ? "chip-short" : "chip-muted"}>{STATUS_LABEL[status] ?? status}</span>
         </div>
       </header>
@@ -40,15 +40,15 @@ export const ExecutionResult = ({ execution }: { execution: Record<string, unkno
         const market = o.order?.perpId ? marketOfPerpId(o.order.perpId) : undefined;
         return (
           <div key={i} className="rounded-md border border-line bg-raised px-3">
-            <Row label="Orden">
+            <Row label="Order">
               {kind?.label ?? "—"} {market ?? ""}
             </Row>
             {o.simulation && (
-              <Row label="Simulación on-chain">
+              <Row label="On-chain simulation">
                 {o.simulation.ok ? (
                   <span className="text-long">OK · orderId {o.simulation.orderId}</span>
                 ) : (
-                  <span className="text-short">Revierte</span>
+                  <span className="text-short">Reverts</span>
                 )}
               </Row>
             )}
@@ -56,7 +56,7 @@ export const ExecutionResult = ({ execution }: { execution: Record<string, unkno
               <p className="num pb-2 text-[11px] break-all text-short">{o.simulation.error}</p>
             )}
             {o.txHash && (
-              <Row label="Transacción">
+              <Row label="Transaction">
                 <a
                   className="link inline-flex items-center gap-1"
                   href={`${EXPLORER_TX}${o.txHash}`}
@@ -75,12 +75,12 @@ export const ExecutionResult = ({ execution }: { execution: Record<string, unkno
 
       {!isLive && (
         <p className="text-xs text-smoke">
-          Modo simulación: el agente validó y simuló la orden, pero no envió nada a la red.
+          Simulation mode: the agent validated and simulated the order but sent nothing to the network.
         </p>
       )}
 
       <details className="text-xs text-smoke">
-        <summary className="cursor-pointer select-none">Detalles técnicos</summary>
+        <summary className="cursor-pointer select-none">Technical details</summary>
         <pre className="num mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-void p-3 text-[11px] text-ash">
           {JSON.stringify(execution, null, 2)}
         </pre>

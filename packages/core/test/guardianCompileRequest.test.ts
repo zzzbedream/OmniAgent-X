@@ -7,7 +7,7 @@ import { PLAN_REQUEST_TYPES, guardianRequestHash } from "../src/strategy/request
 const owner = privateKeyToAccount(`0x${"44".repeat(32)}`);
 const account = "0x00000000000000000000000000000000000000aa" as const;
 const NOW = 1_900_000_000n;
-const TEXT = "Si la distancia a liquidación baja de 8%, reduce la mitad.";
+const TEXT = "If distance to liquidation falls below 8%, reduce by half.";
 const llm = { name: "parser", baseUrl: "https://llm.test", apiKey: "k", model: "deepseek-flash" };
 
 const draft = {
@@ -48,7 +48,7 @@ describe("handleGuardianCompile", () => {
   it("returns the compiled mandate for an eligible, signed request", async () => {
     const out = await handleGuardianCompile(await body(), deps());
     expect(out.status).toBe(200);
-    expect(out.body).toMatchObject({ lines: ["Si la distancia a liquidación baja de 8%: reducir la posición 50%."] });
+    expect(out.body).toMatchObject({ lines: ["If distance to liquidation falls below 8%: reduce the position by 50%."] });
   });
 
   it("400 on a malformed body", async () => {

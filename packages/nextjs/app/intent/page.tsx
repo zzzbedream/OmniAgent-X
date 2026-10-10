@@ -37,8 +37,8 @@ type StrategyResponse = {
 };
 
 // Sized for the 100 AUSD testnet minimum deposit, so the first plan the demo shows is one the rules accept.
-const EXAMPLE = "Corto pequeño en ETH, bajo riesgo";
-const SUGGESTIONS = ["Corto pequeño en ETH, bajo riesgo", "Largo moderado en BTC a 2x", "Cubrir con un corto en SOL"];
+const EXAMPLE = "Small ETH short, low risk";
+const SUGGESTIONS = ["Small ETH short, low risk", "Moderate BTC long at 2x", "Hedge with a SOL short"];
 
 const Intent: NextPage = () => {
   const { account, walletClient, confirm } = useMera();
@@ -74,7 +74,7 @@ const Intent: NextPage = () => {
     setResult(undefined);
     setExecution(undefined);
     try {
-      if (!account || !walletClient || !delegated) throw new Error("inicia sesión y crea tu cuenta de trading primero");
+      if (!account || !walletClient || !delegated) throw new Error("sign in and create your trading account first");
       // Authenticates the paid planning call: bound to this exact text and budget, valid 5 minutes.
       const budgetUsd = Number(budget);
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 240);
@@ -170,14 +170,14 @@ const Intent: NextPage = () => {
     <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6">
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-[28px] font-bold tracking-tight">Estrategia</h1>
+          <h1 className="text-[28px] font-bold tracking-tight">Strategy</h1>
           {isLiveWorker !== undefined && (
             <span className={isLiveWorker ? "chip-live" : "chip-sim"}>
-              {isLiveWorker ? "Agente en vivo" : "Agente en simulación"}
+              {isLiveWorker ? "Agent live" : "Agent in simulation"}
             </span>
           )}
         </div>
-        <p className="text-sm text-ash">Describe tu objetivo. El agente propone, las reglas deciden, tú apruebas.</p>
+        <p className="text-sm text-ash">Describe your goal. The agent proposes, the rules decide, you approve.</p>
       </header>
 
       <ScopeChips budgetUsd={Number(budget) || undefined} />
@@ -188,26 +188,26 @@ const Intent: NextPage = () => {
 
       {!account && (
         <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
-          Primero inicia sesión con tu passkey en{" "}
+          First sign in with your passkey in{" "}
           <Link className="link" href="/onboard">
-            Cuenta
+            Account
           </Link>
           .
         </p>
       )}
       {account && !delegated && (
         <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-sm text-amber">
-          Aún no tienes cuenta de trading.{" "}
+          You have no trading account yet.{" "}
           <Link className="link" href="/onboard">
-            Créala aquí
+            Create it here
           </Link>
           .
         </p>
       )}
 
-      <section className="panel flex flex-col gap-4 p-4" aria-label="Tu instrucción">
+      <section className="panel flex flex-col gap-4 p-4" aria-label="Your instruction">
         <label className="flex flex-col gap-1.5">
-          <span className="label-caps">Tu instrucción</span>
+          <span className="label-caps">Your instruction</span>
           <textarea
             className="textarea textarea-bordered h-24 w-full bg-raised text-[15px]"
             value={request}
@@ -228,18 +228,18 @@ const Intent: NextPage = () => {
           ))}
         </div>
         <label className="flex flex-col gap-1.5">
-          <span className="label-caps">Presupuesto de margen</span>
+          <span className="label-caps">Margin budget</span>
           <div className="flex items-center rounded-[var(--radius-field)] border border-line bg-raised focus-within:border-violet">
             <input
               className="num w-full bg-transparent px-3 py-2.5 text-[15px] outline-none"
               inputMode="decimal"
               value={budget}
               onChange={e => setBudget(e.target.value)}
-              aria-label="Presupuesto de margen en USD"
+              aria-label="Margin budget in USD"
             />
             <span className="num pr-3 text-sm text-smoke">USD</span>
           </div>
-          <span className="text-xs text-smoke">Colateral que asignas al agente para este plan.</span>
+          <span className="text-xs text-smoke">Collateral you assign to the agent for this plan.</span>
         </label>
         <button
           className="btn btn-primary h-12 w-full"
@@ -247,7 +247,7 @@ const Intent: NextPage = () => {
           onClick={plan}
         >
           <SparklesIcon className="h-5 w-5" aria-hidden />
-          {loading === "plan" ? "Consultando al modelo…" : "Generar plan"}
+          {loading === "plan" ? "Asking the model…" : "Generate plan"}
         </button>
       </section>
 
@@ -260,18 +260,18 @@ const Intent: NextPage = () => {
           <div className="flex justify-end">
             <p className="max-w-[85%] rounded-[var(--radius-box)] rounded-br-sm border border-line-strong bg-violet-wash px-3 py-2 text-sm">
               {request}
-              <span className="num mt-1 block text-[11px] text-ash">presupuesto {result.budgetUsd} USD</span>
+              <span className="num mt-1 block text-[11px] text-ash">budget {result.budgetUsd} USD</span>
             </p>
           </div>
 
           {result.intent.unsupported.length > 0 && (
             <p className="rounded-md border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-amber">
-              No soportado (se ignora): {result.intent.unsupported.join("; ")}
+              Not supported (ignored): {result.intent.unsupported.join("; ")}
             </p>
           )}
 
           {result.plan.orders.length === 0 && (
-            <p className="panel p-4 text-sm text-ash">Sin órdenes: el modelo no encontró nada que encaje.</p>
+            <p className="panel p-4 text-sm text-ash">No orders: the model found nothing that fits.</p>
           )}
           {result.plan.orders.map((o, i) => (
             <OrderTicket key={`${o.market}-${i}`} order={o} index={i}>
@@ -279,7 +279,7 @@ const Intent: NextPage = () => {
                 <details className="group">
                   <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                     <span className="flex flex-col gap-1">
-                      <span className="label-caps">Razonamiento del modelo</span>
+                      <span className="label-caps">Model reasoning</span>
                       <span className="line-clamp-1 text-sm text-ash group-open:line-clamp-none">
                         {result.plan.summary}
                       </span>
@@ -307,13 +307,14 @@ const Intent: NextPage = () => {
             >
               <FingerPrintIcon className="h-6 w-6" aria-hidden />
               {loading === "approve"
-                ? "Confirma con tu huella…"
+                ? "Confirm with your fingerprint…"
                 : execution
-                  ? "Plan enviado al agente ✓"
-                  : "Aprobar con passkey"}
+                  ? "Plan sent to the agent ✓"
+                  : "Approve with passkey"}
             </button>
             <span className="text-center text-[11px] text-smoke">
-              Pide tu huella o Face ID · firma EIP-712 del plan exacto · válida 5 min · el agente nunca puede retirar
+              Asks for your fingerprint or Face ID · EIP-712 signature of the exact plan · valid 5 min · the agent can
+              never withdraw
             </span>
           </div>
         </>

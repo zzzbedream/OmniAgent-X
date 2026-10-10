@@ -24,14 +24,14 @@ const EXPLORER_TX = "https://testnet.monadscan.com/tx/";
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 const LABEL: Record<string, string> = {
-  mandate: "Mandato activado",
-  revoke: "Mandato revocado",
+  mandate: "Mandate activated",
+  revoke: "Mandate revoked",
 };
 
 /** Guardian history from the worker's decision log. Links are built only from well-formed tx hashes. */
 export function GuardianFeed({ entries, onRate }: Props) {
   const rows = entries.filter(e => e.kind === "guardian" || e.kind === "mandate" || e.kind === "revoke");
-  if (rows.length === 0) return <p className="text-sm text-smoke">Todavía no hay acciones del guardián.</p>;
+  if (rows.length === 0) return <p className="text-sm text-smoke">No guardian actions yet.</p>;
   return (
     <ul className="flex flex-col gap-2">
       {rows.map(e => {
@@ -48,7 +48,7 @@ export function GuardianFeed({ entries, onRate }: Props) {
             {d.error && <p className="text-short text-xs break-words">{d.error}</p>}
             {tx && (
               <a className="link text-xs" href={`${EXPLORER_TX}${tx}`} target="_blank" rel="noopener noreferrer">
-                Ver transacción
+                View transaction
               </a>
             )}
             {tx && onRate && e.kind === "guardian" && e.status === "sent" && d.type && ACTIONS.includes(d.type) && (
@@ -76,17 +76,17 @@ function RateButtons({ onRate }: { onRate: (helpful: boolean) => Promise<void> }
       setState("error");
     }
   };
-  if (state === "done") return <p className="text-xs text-long">Calificación registrada en ERC-8004.</p>;
+  if (state === "done") return <p className="text-xs text-long">Rating recorded on ERC-8004.</p>;
   return (
     <div className="flex gap-2 items-center text-xs mt-1">
-      <span className="text-smoke">¿Te protegió? (reputación on-chain, ERC-8004)</span>
+      <span className="text-smoke">Did it protect you? (on-chain reputation, ERC-8004)</span>
       <button className="btn btn-xs" disabled={state === "sending"} onClick={() => rate(true)}>
-        Sí
+        Yes
       </button>
       <button className="btn btn-xs" disabled={state === "sending"} onClick={() => rate(false)}>
         No
       </button>
-      {state === "error" && <span className="text-short">no se pudo enviar</span>}
+      {state === "error" && <span className="text-short">could not send</span>}
     </div>
   );
 }

@@ -17,9 +17,8 @@ export const marketOfPerpId = (perpId: string | number | bigint) => MARKET_BY_PE
 /** First line of a wallet/RPC error, with the common onboarding failures said plainly. */
 export function friendlyTxError(e: unknown): string {
   const raw = (e as Error)?.message ?? String(e);
-  if (/exceeds the balance|insufficient funds/i.test(raw))
-    return "Necesitas MON para el gas en tu dirección de passkey.";
-  if (/user rejected|NotAllowedError|cancel/i.test(raw)) return "Firma cancelada.";
+  if (/exceeds the balance|insufficient funds/i.test(raw)) return "You need MON for gas on your passkey address.";
+  if (/user rejected|NotAllowedError|cancel/i.test(raw)) return "Signature cancelled.";
   return raw.split("\n")[0];
 }
 
@@ -27,13 +26,13 @@ export function friendlyTxError(e: unknown): string {
 export function describeOrderType(orderType: number): { label: string; side: "long" | "short" } | undefined {
   switch (orderType) {
     case OrderDescType.OpenLong:
-      return { label: "Abrir largo", side: "long" };
+      return { label: "Open long", side: "long" };
     case OrderDescType.OpenShort:
-      return { label: "Abrir corto", side: "short" };
+      return { label: "Open short", side: "short" };
     case OrderDescType.CloseLong:
-      return { label: "Cerrar largo", side: "long" };
+      return { label: "Close long", side: "long" };
     case OrderDescType.CloseShort:
-      return { label: "Cerrar corto", side: "short" };
+      return { label: "Close short", side: "short" };
     default:
       return undefined;
   }

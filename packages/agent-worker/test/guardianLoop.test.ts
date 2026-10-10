@@ -161,7 +161,7 @@ describe("GuardianLoop.tick", () => {
     expect(executed).toEqual(["reduce"]);
     const [entry] = log.recent(account);
     expect(entry).toMatchObject({ kind: "guardian", mode: "dry-run", status: "built", planHash: hashMandate(mandate) });
-    expect((entry!.detail as { explanation: string }).explanation).toMatch(/^BTC: reduciría la posición 50%/);
+    expect((entry!.detail as { explanation: string }).explanation).toMatch(/^BTC: would reduce the position by 50%/);
     // Dry-run cooldowns live in memory only, so switching to live starts from a clean state.
     expect(store.stateFor(account, T0).lastActionAtSec.BTC).toBeUndefined();
 

@@ -47,7 +47,7 @@ const MeraContext = createContext<MeraContextValue | null>(null);
 export function describeMeraError(e: unknown): string {
   if (isMeraError(e)) {
     if (e.code === "PRF_UNAVAILABLE") {
-      return "Este dispositivo o gestor de contraseñas no soporta WebAuthn PRF. Usa iOS 18+ (Safari) o Android con Google Password Manager.";
+      return "This device or password manager does not support WebAuthn PRF. Use iOS 18+ (Safari) or Android with Google Password Manager.";
     }
     return `${e.code}: ${e.message}`;
   }
@@ -98,11 +98,11 @@ export function MeraProvider({ children }: { children: React.ReactNode }) {
     create: userName => run(() => createMeraAccount(userName)),
     signIn: () => run(signInMeraAccount),
     confirm: async () => {
-      if (!account) throw new Error("inicia sesión con tu passkey primero");
+      if (!account) throw new Error("sign in with your passkey first");
       try {
         await confirmMeraAccount(account);
       } catch (e) {
-        throw new Error(`Confirmación con passkey fallida: ${describeMeraError(e)}`);
+        throw new Error(`Passkey confirmation failed: ${describeMeraError(e)}`);
       }
     },
     end,

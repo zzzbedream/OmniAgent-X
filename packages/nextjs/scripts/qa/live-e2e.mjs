@@ -69,10 +69,10 @@ await cdp.send("WebAuthn.addVirtualAuthenticator", {
 });
 
 const tab = name => page.locator("nav.fixed").getByRole("link", { name });
-const activity = async () => page.locator("section[aria-label='Actividad'] li").allTextContents().catch(() => []);
+const activity = async () => page.locator("section[aria-label='Activity'] li").allTextContents().catch(() => []);
 const waitActivity = (re, timeout) =>
   page.waitForFunction(
-    r => [...document.querySelectorAll("section[aria-label='Actividad'] li")].some(li => new RegExp(r).test(li.textContent ?? "")),
+    r => [...document.querySelectorAll("section[aria-label='Activity'] li")].some(li => new RegExp(r).test(li.textContent ?? "")),
     re.source,
     { timeout },
   );
@@ -86,82 +86,82 @@ let txOpen;
 let txClose;
 
 try {
-  await step("Abrir Cuenta", async () => {
+  await step("Open Account", async () => {
     await page.goto(`${base}/onboard`, { waitUntil: "networkidle" });
   });
 
-  await step("Crear passkey", async () => {
-    await page.getByPlaceholder("Nombre para el passkey").fill(`qa-${Date.now()}`);
-    await page.getByRole("button", { name: "Crear passkey" }).click();
+  await step("Create passkey", async () => {
+    await page.getByPlaceholder("Name for the passkey").fill(`qa-${Date.now()}`);
+    await page.getByRole("button", { name: "Create passkey" }).click();
     const addr = page.locator("span.num.break-all").first();
     await addr.waitFor({ timeout: 30_000 });
     owner = (await addr.textContent()).trim();
     return owner;
   });
 
-  await step("Gas y AUSD automáticos (estación)", async () => {
-    await waitActivity(/gas de prueba recibido|fondos de prueba falló|ya los recibió/, 90_000);
-    await failIfActivity(/fondos de prueba falló/);
+  await step("Automatic gas and AUSD (gas station)", async () => {
+    await waitActivity(/test gas received|test funds failed|already received/, 90_000);
+    await failIfActivity(/test funds failed/);
     await page.waitForFunction(() => /Gas:\s*0\.[1-9]/.test(document.body.innerText), null, { timeout: 30_000 });
-    return (await activity()).filter(l => /prueba/.test(l)).length + " movimientos";
+    return (await activity()).filter(l => /test/.test(l)).length + " transfers";
   });
 
-  await step("Crear cuenta de trading (passkey)", async () => {
-    await page.getByRole("button", { name: "Crear cuenta de trading" }).click();
-    await waitActivity(/cuenta delegada: 0x|crear cuenta delegada falló|worker no disponible/, 120_000);
-    await failIfActivity(/falló|no disponible/);
-    return (await activity()).find(l => /cuenta delegada: 0x/.test(l))?.match(/0x[0-9a-fA-F]{40}/)?.[0];
+  await step("Create trading account (passkey)", async () => {
+    await page.getByRole("button", { name: "Create trading account" }).click();
+    await waitActivity(/delegated account: 0x|create delegated account failed|worker unavailable/, 120_000);
+    await failIfActivity(/failed|unavailable/);
+    return (await activity()).find(l => /delegated account: 0x/.test(l))?.match(/0x[0-9a-fA-F]{40}/)?.[0];
   });
 
-  await step("Reparar permisos del agente (passkey, 9 tx)", async () => {
-    const repair = page.getByRole("button", { name: "Reparar permisos" });
+  await step("Repair agent permissions (passkey, 9 tx)", async () => {
+    const repair = page.getByRole("button", { name: "Repair permissions" });
     await repair.waitFor({ timeout: 30_000 });
     await repair.click();
-    await page.getByRole("heading", { name: "Permisos del agente desactualizados" }).waitFor({ state: "detached", timeout: 240_000 });
-    await failIfActivity(/falló/);
+    await page.getByRole("heading", { name: "Agent permissions out of date" }).waitFor({ state: "detached", timeout: 240_000 });
+    await failIfActivity(/failed/);
   });
 
-  await step("Depositar 100 AUSD y abrir cuenta (passkey)", async () => {
-    await page.getByRole("button", { name: "Depositar y abrir" }).click();
-    await waitActivity(/crear cuenta en el exchange: confirmada|falló/, 120_000);
-    await failIfActivity(/falló/);
-    await page.waitForFunction(() => /EN EL EXCHANGE\s*100/i.test(document.body.innerText), null, { timeout: 30_000 });
+  await step("Deposit 100 AUSD and open account (passkey)", async () => {
+    await page.getByRole("button", { name: "Deposit and open" }).click();
+    await waitActivity(/create exchange account: confirmed|failed/, 120_000);
+    await failIfActivity(/failed/);
+    await page.waitForFunction(() => /ON THE EXCHANGE\s*100/i.test(document.body.innerText), null, { timeout: 30_000 });
   });
 
-  await step("Generar plan (DeepSeek + reglas)", async () => {
+  await step("Generate plan (DeepSeek + rules)", async () => {
     await tab("Strategy").click();
-    await page.getByRole("button", { name: "Generar plan" }).click();
-    await page.getByText(/Riesgo aprobado|Plan rechazado/).first().waitFor({ timeout: 90_000 });
-    if (await page.getByText("Plan rechazado por las reglas").count()) throw new Error("plan rejected by the rules");
+    await page.getByRole("button", { name: "Generate plan" }).click();
+    await page.getByText(/Risk approved|Plan rejected/).first().waitFor({ timeout: 90_000 });
+    if (await page.getByText("Plan rejected by the rules").count()) throw new Error("plan rejected by the rules");
     const ticket = (await page.locator("article").first().innerText()).replace(/\s+/g, " ");
-    // The planner must answer in the user's language (Spanish request → Spanish reasoning).
+    // The planner must answer in the user's language (English request → English reasoning).
     const reasoning = (await page.locator("article details summary").first().innerText()).replace(/\s+/g, " ");
     const spanishHits = (reasoning.match(/\b(el|la|de|en|con|para|corto|posición|riesgo|apalancamiento)\b/gi) ?? []).length;
     const englishHits = (reasoning.match(/\b(the|with|for|short|position|risk|leverage)\b/gi) ?? []).length;
-    if (spanishHits <= englishHits) throw new Error(`reasoning not in Spanish: ${reasoning.slice(0, 160)}`);
+    if (englishHits <= spanishHits) throw new Error(`reasoning not in English: ${reasoning.slice(0, 160)}`);
     return `${ticket.slice(0, 60)} | ${reasoning.slice(0, 110)}`;
   });
 
-  await step("Aprobar con passkey → orden real", async () => {
-    await page.getByRole("button", { name: "Aprobar con passkey" }).click();
-    const result = page.locator("section[aria-label='Resultado del agente']");
+  await step("Approve with passkey → live order", async () => {
+    await page.getByRole("button", { name: "Approve with passkey" }).click();
+    const result = page.locator("section[aria-label='Agent result']");
     await result.waitFor({ timeout: 90_000 });
     const text = (await result.innerText()).replace(/\s+/g, " ");
-    if (!/En vivo/i.test(text) || !/Enviada a Perpl/i.test(text)) throw new Error(text.slice(0, 200));
+    if (!/Live/i.test(text) || !/Sent to Perpl/i.test(text)) throw new Error(text.slice(0, 200));
     txOpen = await result.locator("a[href*='/tx/']").first().getAttribute("href");
     // After the agent answers, the button must say the plan was sent and stay disabled (no double submit).
-    const sent = page.getByRole("button", { name: /Plan enviado al agente/ });
+    const sent = page.getByRole("button", { name: /Plan sent to the agent/ });
     await sent.waitFor({ timeout: 10_000 });
     if (!(await sent.isDisabled())) throw new Error("approve button still enabled after the agent answered");
     return txOpen;
   });
 
-  await step("Ver la posición en Riesgo", async () => {
+  await step("See the position in Risk", async () => {
     await tab("Risk").click();
     const row = page.locator("article", { hasText: "-PERP" }).first();
     await row.waitFor({ timeout: 60_000 });
     // The side must be known (indexer or worker log) and shown as a status chip, never "Lado ?".
-    await page.locator("section[aria-label='Posiciones'] :is(.chip-short, .chip-long)").first().waitFor({ timeout: 45_000 });
+    await page.locator("section[aria-label='Positions'] :is(.chip-short, .chip-long)").first().waitFor({ timeout: 45_000 });
     // Sub-cent PnL must read 0.00, never "-0".
     const summary = (await page.locator("section[aria-label='Resumen de la cuenta']").innerText()).replace(/\s+/g, " ");
     const rowText = (await row.innerText()).replace(/\s+/g, " ");
@@ -169,26 +169,26 @@ try {
     return rowText.slice(0, 120);
   }, { soft: true });
 
-  await step("Cerrar con passkey", async () => {
-    await page.getByRole("button", { name: "Cerrar con passkey" }).click();
+  await step("Close with passkey", async () => {
+    await page.getByRole("button", { name: "Close with passkey" }).click();
     await page.getByText(/live · sent|live · failed|dry-run/).first().waitFor({ timeout: 90_000 });
-    const res = await page.locator("section[aria-label='Posiciones'] p.num").first().innerText();
+    const res = await page.locator("section[aria-label='Positions'] p.num").first().innerText();
     if (!/live · sent/.test(res)) throw new Error(res);
     txClose = res.match(/0x[0-9a-fA-F]{64}/)?.[0];
-    await page.getByText("Sin posiciones abiertas.").waitFor({ timeout: 60_000 });
+    await page.getByText("No open positions.").waitFor({ timeout: 60_000 });
     return txClose;
   });
 
-  await step("Retirar a la wallet (confirmación + passkey)", async () => {
+  await step("Withdraw to wallet (confirm + passkey)", async () => {
     await tab("Account").click();
-    const hero = page.locator("text=En el exchange").locator("xpath=..");
+    const hero = page.locator("text=On the exchange").locator("xpath=..");
     await hero.waitFor({ timeout: 30_000 });
     const bal = Number((await hero.innerText()).match(/([\d.]+)\s*AUSD/)?.[1] ?? "0");
     const amount = Math.floor(bal * 100) / 100;
-    await page.getByLabel("Monto").fill(String(amount));
-    await page.getByRole("button", { name: "Retirar" }).click();
-    await waitActivity(/retirar colateral: confirmada|retirar.*falló/, 90_000);
-    await failIfActivity(/retirar.*falló/);
+    await page.getByLabel("Amount").fill(String(amount));
+    await page.getByRole("button", { name: "Withdraw" }).click();
+    await waitActivity(/withdraw collateral: confirmed|withdraw.*failed/, 90_000);
+    await failIfActivity(/withdraw.*failed/);
     return `${amount} AUSD`;
   });
 } catch {

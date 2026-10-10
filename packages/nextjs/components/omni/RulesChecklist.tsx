@@ -6,14 +6,14 @@ const P = DEFAULT_TESTNET_POLICY;
 
 /** Each row maps to the violation codes the deterministic RiskPolicy (core/strategy/risk.ts) can emit. */
 const RULES: readonly { label: string; codes: readonly string[] }[] = [
-  { label: `Mercados permitidos (${P.allowedMarkets.join(" · ")})`, codes: ["market"] },
-  { label: `Apalancamiento ≤ ${P.maxLeverage}x`, codes: ["maxLeverage"] },
+  { label: `Allowed markets (${P.allowedMarkets.join(" · ")})`, codes: ["market"] },
+  { label: `Leverage ≤ ${P.maxLeverage}x`, codes: ["maxLeverage"] },
   {
-    label: `Nocional por orden entre ${P.minOrderNotionalUsd} y ${P.maxOrderNotionalUsd} USD`,
+    label: `Notional per order between ${P.minOrderNotionalUsd} and ${P.maxOrderNotionalUsd} USD`,
     codes: ["minOrderNotional", "maxOrderNotional"],
   },
-  { label: `Máx ${P.maxOrders} órdenes, una por mercado`, codes: ["maxOrders", "duplicateMarket", "orders"] },
-  { label: "Margen requerido ≤ presupuesto", codes: ["budget"] },
+  { label: `Max ${P.maxOrders} orders, one per market`, codes: ["maxOrders", "duplicateMarket", "orders"] },
+  { label: "Required margin ≤ budget", codes: ["budget"] },
 ];
 
 export const RulesChecklist = ({ risk, budgetUsd }: { risk: RiskReport; budgetUsd: number }) => {
@@ -25,9 +25,9 @@ export const RulesChecklist = ({ risk, budgetUsd }: { risk: RiskReport; budgetUs
   const usedPct = budgetUsd > 0 ? Math.min(100, (risk.requiredMarginUsd / budgetUsd) * 100) : 0;
 
   return (
-    <section className="panel flex flex-col gap-3 p-4" aria-label="Reglas deterministas">
+    <section className="panel flex flex-col gap-3 p-4" aria-label="Deterministic rules">
       <header className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Reglas deterministas</h3>
+        <h3 className="text-sm font-semibold">Deterministic rules</h3>
         <span className={`num text-sm ${risk.ok ? "text-long" : "text-short"}`}>
           {passed}/{rows.length}
         </span>
@@ -39,9 +39,9 @@ export const RulesChecklist = ({ risk, budgetUsd }: { risk: RiskReport; budgetUs
             <li key={row.label} className="flex flex-col gap-0.5">
               <span className="flex items-start gap-2 text-sm">
                 {isOk ? (
-                  <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-long" aria-label="cumple" />
+                  <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-long" aria-label="passes" />
                 ) : (
-                  <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-short" aria-label="no cumple" />
+                  <XCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-short" aria-label="fails" />
                 )}
                 <span className={isOk ? "text-ash" : "text-bone"}>{row.label}</span>
               </span>
@@ -56,7 +56,7 @@ export const RulesChecklist = ({ risk, budgetUsd }: { risk: RiskReport; budgetUs
       </ul>
       <div className="flex flex-col gap-1.5 border-t border-line pt-3">
         <div className="flex items-center justify-between">
-          <span className="label-caps">Margen usado</span>
+          <span className="label-caps">Margin used</span>
           <span className="num text-xs text-ash">
             {fmtUsd(risk.requiredMarginUsd)} / {fmtUsd(budgetUsd)} USD
           </span>
@@ -78,7 +78,7 @@ export const RulesChecklist = ({ risk, budgetUsd }: { risk: RiskReport; budgetUs
         ) : (
           <XCircleIcon className="h-5 w-5" aria-hidden />
         )}
-        {risk.ok ? "Riesgo aprobado" : "Plan rechazado por las reglas"}
+        {risk.ok ? "Risk approved" : "Plan rejected by the rules"}
       </p>
     </section>
   );

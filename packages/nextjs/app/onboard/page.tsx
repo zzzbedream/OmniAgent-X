@@ -94,10 +94,10 @@ const Onboard: NextPage = () => {
         ownerCollateral,
         account: acc,
         operator: health?.operator,
-        workerMode: health ? (health.executionEnabled ? "LIVE" : "dry-run") : "sin conexión",
+        workerMode: health ? (health.executionEnabled ? "LIVE" : "dry-run") : "offline",
       });
     } catch (e) {
-      push(`error leyendo estado: ${(e as Error).message}`);
+      push(`could not read state: ${(e as Error).message}`);
     }
   }, [account, delegated, push]);
 
@@ -112,7 +112,7 @@ const Onboard: NextPage = () => {
       if (cancelled) return;
       setDelegated(r?.address);
       // Another browser (or cleared site data): the account was found on-chain instead of offering a duplicate.
-      if (r?.source === "chain") push(`cuenta de trading recuperada on-chain: ${r.address}`);
+      if (r?.source === "chain") push(`trading account recovered on-chain: ${r.address}`);
     });
     return () => {
       cancelled = true;
@@ -137,12 +137,12 @@ const Onboard: NextPage = () => {
         message: { owner: account.address, deadline },
       });
       const r = await worker.fund({ owner: account.address, deadline: deadline.toString(), signature });
-      if (r.status === "already-funded") push("fondos de prueba: esta dirección ya los recibió antes");
-      if (r.mon?.status === "sent") push(`gas de prueba recibido ${r.mon.txHash}`);
-      if (r.collateral?.status === "sent") push(`AUSD de prueba recibidos ${r.collateral.txHash}`);
-      if (r.collateral?.status === "failed") push(`AUSD de prueba falló (usa el faucet abajo): ${r.collateral.error}`);
+      if (r.status === "already-funded") push("test funds: this address already received them");
+      if (r.mon?.status === "sent") push(`test gas received ${r.mon.txHash}`);
+      if (r.collateral?.status === "sent") push(`test AUSD received ${r.collateral.txHash}`);
+      if (r.collateral?.status === "failed") push(`test AUSD failed (use the faucet below): ${r.collateral.error}`);
     } catch (e) {
-      push(`fondos de prueba falló: ${friendlyTxError(e)}`);
+      push(`test funds failed: ${friendlyTxError(e)}`);
     } finally {
       setFundState("done");
       void refresh();
@@ -157,13 +157,13 @@ const Onboard: NextPage = () => {
     setPending(true);
     try {
       const hash = await fn();
-      push(`${label}: enviada ${hash}`);
+      push(`${label}: sent ${hash}`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status !== "success") throw new Error(`revertida (${hash})`);
-      push(`${label}: confirmada`);
+      if (receipt.status !== "success") throw new Error(`reverted (${hash})`);
+      push(`${label}: confirmed`);
       return receipt;
     } catch (e) {
-      push(`${label} falló: ${friendlyTxError(e)}`);
+      push(`${label} failed: ${friendlyTxError(e)}`);
       return undefined;
     } finally {
       setPending(false);
@@ -184,7 +184,7 @@ const Onboard: NextPage = () => {
 
   const createTradingAccount = async () => {
     if (!account || !walletClient) return;
-    if (!(await confirmed("crear cuenta de trading"))) return;
+    if (!(await confirmed("create trading account"))) return;
     let consent;
     try {
       // Prove control of the owner address before the worker signs an operator consent for it.
@@ -197,10 +197,10 @@ const Onboard: NextPage = () => {
       });
       consent = await worker.consent({ owner: account.address, deadline: deadline.toString(), signature });
     } catch (e) {
-      push(`worker no disponible: ${friendlyTxError(e)}`);
+      push(`worker unavailable: ${friendlyTxError(e)}`);
       return;
     }
-    const receipt = await tx("crear cuenta delegada", () =>
+    const receipt = await tx("create delegated account", () =>
       walletClient.writeContract({
         address: PERPL_TESTNET.factory,
         abi: delegatedAccountFactoryAbi,
@@ -214,19 +214,19 @@ const Onboard: NextPage = () => {
       logs: receipt.logs,
       eventName: "DelegatedAccountCreated",
     });
-    if (!created) return push("no se encontró el evento DelegatedAccountCreated");
+    if (!created) return push("DelegatedAccountCreated event not found");
     saveDelegatedAccount(account.address, created.args.proxy);
     setDelegated(created.args.proxy);
-    push(`cuenta delegada: ${created.args.proxy} (operador ${created.args.operator})`);
+    push(`delegated account: ${created.args.proxy} (operator ${created.args.operator})`);
   };
 
   // One owner transaction per selector, same changes as Perpl's SyncOperatorAllowlistScript.
   const repairAllowlist = async () => {
     if (!walletClient || !status?.account) return;
-    if (!(await confirmed("reparar permisos"))) return;
+    if (!(await confirmed("repair permissions"))) return;
     const acc = status.account;
     for (const change of acc.allowlistDrift) {
-      const ok = await tx(`${change.allowed ? "permitir" : "revocar"} ${change.name}`, () =>
+      const ok = await tx(`${change.allowed ? "allow" : "revoke"} ${change.name}`, () =>
         walletClient.writeContract({
           address: acc.address,
           abi: delegatedAccountAbi,
@@ -240,13 +240,13 @@ const Onboard: NextPage = () => {
 
   const deposit = async () => {
     if (!walletClient || !status?.account) return;
-    if (!(await confirmed("depositar"))) return;
+    if (!(await confirmed("deposit"))) return;
     const amountCNS = parseUnits(amount, status.collateral.decimals);
     const acc = status.account;
     // Tokens must sit in the DelegatedAccount before createAccount/depositCollateral pull them.
     const missing = amountCNS > acc.heldCollateral ? amountCNS - acc.heldCollateral : 0n;
     if (missing > 0n) {
-      const ok = await tx("transferir colateral", () =>
+      const ok = await tx("transfer collateral", () =>
         walletClient.writeContract({
           address: status.collateral.token,
           abi: erc20Abi,
@@ -257,7 +257,7 @@ const Onboard: NextPage = () => {
       if (!ok) return;
     }
     if (acc.accountId === 0n) {
-      await tx("crear cuenta en el exchange", () =>
+      await tx("create exchange account", () =>
         walletClient.writeContract({
           address: acc.address,
           abi: delegatedAccountAbi,
@@ -267,7 +267,7 @@ const Onboard: NextPage = () => {
       );
     } else {
       // The owner may call any Exchange function through the DelegatedAccount fallback.
-      await tx("depositar colateral", () =>
+      await tx("deposit collateral", () =>
         walletClient.writeContract({
           address: acc.address,
           abi: exchangeAbi,
@@ -281,7 +281,7 @@ const Onboard: NextPage = () => {
   // Testnet only: Agora's faucet sends AUSD to the passkey address (the balance below shows whether it arrived).
   const requestAusd = async () => {
     if (!walletClient || !account) return;
-    await tx("pedir AUSD de prueba", () =>
+    await tx("request test AUSD", () =>
       walletClient.writeContract({
         address: AGORA_AUSD_FAUCET_TESTNET,
         abi: ausdFaucetAbi,
@@ -295,9 +295,9 @@ const Onboard: NextPage = () => {
     if (!walletClient || !status?.account) return;
     const acc = status.account;
     // Withdrawing leaves the agent nothing to trade with, so ask once.
-    if (!window.confirm(`¿Retirar ${amount} ${status.collateral.symbol} del exchange a tu wallet?`)) return;
-    if (!(await confirmed("retirar"))) return;
-    await tx("retirar colateral", () =>
+    if (!window.confirm(`Withdraw ${amount} ${status.collateral.symbol} from the exchange to your wallet?`)) return;
+    if (!(await confirmed("withdraw"))) return;
+    await tx("withdraw collateral", () =>
       walletClient.writeContract({
         address: acc.address,
         abi: delegatedAccountAbi,
@@ -316,29 +316,29 @@ const Onboard: NextPage = () => {
   return (
     <div className="mx-auto flex w-full max-w-[560px] grow flex-col gap-5 px-4 pt-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-[28px] font-bold tracking-tight">Cuenta</h1>
+        <h1 className="text-[28px] font-bold tracking-tight">Account</h1>
         <p className="text-sm text-ash">
-          Tu passkey es la llave. El agente opera tu cuenta, pero solo tú puedes retirar.
+          Your passkey is the key. The agent trades your account, but only you can withdraw.
         </p>
       </header>
 
       <section className="panel flex flex-col gap-3 p-4">
-        <StepHeader n={1} title="Passkey" detail="Mera · sin frase semilla" isDone={!!account} />
+        <StepHeader n={1} title="Passkey" detail="Mera · no seed phrase" isDone={!!account} />
         {!account ? (
           <>
             <input
               className="input input-bordered w-full bg-raised"
-              placeholder="Nombre para el passkey (p. ej. tu email)"
+              placeholder="Name for the passkey (e.g. your email)"
               value={userName}
               onChange={e => setUserName(e.target.value)}
-              aria-label="Nombre del passkey"
+              aria-label="Passkey name"
             />
             <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2">
               <button className="btn btn-primary" disabled={busy || !userName} onClick={() => create(userName)}>
-                Crear passkey
+                Create passkey
               </button>
               <button className="btn btn-outline border-line" disabled={busy} onClick={signIn}>
-                Ya tengo passkey
+                I have a passkey
               </button>
             </div>
           </>
@@ -346,7 +346,7 @@ const Onboard: NextPage = () => {
           <div className="flex items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2">
             <span className="num text-sm break-all">{account.address}</span>
             <button className="btn btn-ghost btn-sm text-ash" onClick={end}>
-              Salir
+              Sign out
             </button>
           </div>
         )}
@@ -362,12 +362,12 @@ const Onboard: NextPage = () => {
         {fundState === "running" && (
           <p className="flex items-center gap-2 rounded-md border border-violet/40 bg-violet-wash px-3 py-2 text-sm">
             <span className="loading loading-spinner loading-xs text-violet" aria-hidden />
-            Preparando tu cuenta: enviando gas y AUSD de prueba…
+            Preparing your account: sending test gas and AUSD…
           </p>
         )}
         {account && status && fundState === "done" && status.monBalance < LOW_GAS_WEI && (
           <button className="btn btn-outline btn-sm self-start border-line" onClick={requestTestFunds}>
-            Reintentar gas de prueba
+            Retry test gas
           </button>
         )}
       </section>
@@ -376,19 +376,19 @@ const Onboard: NextPage = () => {
         <section className="panel flex flex-col gap-3 p-4">
           <StepHeader
             n={2}
-            title="Cuenta de trading"
+            title="Trading account"
             detail="Perpl DelegatedAccount"
             isDone={!!delegated && !!status?.account?.isOperator}
           />
           <p className="text-sm text-ash">
-            El agente <span className="num text-bone">{status?.operator ? shortHex(status.operator) : "?"}</span> puede
-            operar pero no retirar.{" "}
+            The agent <span className="num text-bone">{status?.operator ? shortHex(status.operator) : "?"}</span> can
+            trade but not withdraw.{" "}
             {status?.workerMode && (
               <span className={status.workerMode === "LIVE" ? "chip-live" : "chip-sim"}>
                 {status.workerMode === "LIVE"
-                  ? "En vivo"
+                  ? "Live"
                   : status.workerMode === "dry-run"
-                    ? "Simulación"
+                    ? "Simulation"
                     : status.workerMode}
               </span>
             )}
@@ -400,29 +400,29 @@ const Onboard: NextPage = () => {
                 disabled={pending || fundState === "running"}
                 onClick={createTradingAccount}
               >
-                Crear cuenta de trading
+                Create trading account
               </button>
               <input
                 className="input input-bordered input-sm w-full bg-raised"
-                placeholder="…o pega la dirección de una cuenta existente"
+                placeholder="…or paste an existing account address"
                 onChange={e => {
                   if (isAddress(e.target.value)) {
                     saveDelegatedAccount(account.address, e.target.value);
                     setDelegated(e.target.value);
                   }
                 }}
-                aria-label="Dirección de cuenta delegada existente"
+                aria-label="Existing delegated account address"
               />
             </div>
           ) : (
             <dl className="rounded-md border border-line bg-raised px-3">
-              <KeyValue label="Cuenta delegada">
+              <KeyValue label="Delegated account">
                 <span className="num">{shortHex(delegated)}</span>
               </KeyValue>
-              <KeyValue label="Owner correcto">
+              <KeyValue label="Correct owner">
                 <Check value={status?.account ? status.account.owner === account.address : undefined} />
               </KeyValue>
-              <KeyValue label="Operador activo">
+              <KeyValue label="Operator active">
                 <Check value={status?.account?.isOperator} />
               </KeyValue>
               <KeyValue label="Account ID (exchange)">
@@ -435,24 +435,24 @@ const Onboard: NextPage = () => {
 
       {account && delegated && status?.account && status.account.allowlistDrift.length > 0 && (
         <section className="flex flex-col gap-3 rounded-[var(--radius-box)] border border-amber/40 bg-amber/5 p-4">
-          <h2 className="font-semibold text-amber">Permisos del agente desactualizados</h2>
+          <h2 className="font-semibold text-amber">Agent permissions out of date</h2>
           <p className="text-sm text-ash">
-            La Factory de Perpl en testnet crea cuentas con una allowlist antigua, y el agente aún no puede llamar a{" "}
-            <code className="num text-bone">execOrder</code>. Esto aplica los mismos cambios que el script oficial de
-            Perpl: {status.account.allowlistDrift.length} transacciones firmadas por ti.
+            Perpl&apos;s testnet factory creates accounts with an old allowlist, so the agent cannot call{" "}
+            <code className="num text-bone">execOrder</code> yet. This applies the same changes as Perpl&apos;s official
+            script: {status.account.allowlistDrift.length} transactions signed by you.
           </p>
           <ul className="flex flex-col gap-1 text-xs">
             {status.account.allowlistDrift.map(c => (
               <li key={c.selector} className="flex items-center justify-between gap-2">
                 <span className={c.allowed ? "text-long" : "text-short"}>
-                  {c.allowed ? "permitir" : "revocar"} {c.name}
+                  {c.allowed ? "allow" : "revoke"} {c.name}
                 </span>
                 <span className="num text-smoke">{c.selector}</span>
               </li>
             ))}
           </ul>
           <button className="btn btn-warning" disabled={pending} onClick={repairAllowlist}>
-            Reparar permisos
+            Repair permissions
           </button>
         </section>
       )}
@@ -461,53 +461,53 @@ const Onboard: NextPage = () => {
         <section className="panel flex flex-col gap-4 p-4">
           <StepHeader
             n={3}
-            title="Colateral"
-            detail={`${status.collateral.symbol} · leído on-chain`}
+            title="Collateral"
+            detail={`${status.collateral.symbol} · read on-chain`}
             isDone={isAccountOpen && isAllowlistOk}
           />
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="En el exchange" value={fmt(status.account.balanceCNS)} isHero />
-            <Stat label="En tu wallet" value={fmt(status.ownerCollateral)} />
-            <Stat label="Bloqueado" value={fmt(status.account.lockedBalanceCNS)} />
+            <Stat label="On the exchange" value={fmt(status.account.balanceCNS)} isHero />
+            <Stat label="In your wallet" value={fmt(status.ownerCollateral)} />
+            <Stat label="Locked" value={fmt(status.account.lockedBalanceCNS)} />
             <Stat
-              label="Mínimos"
-              value={`abrir ${PERPL_TESTNET_MIN_OPEN_AUSD} · luego ${PERPL_TESTNET_MIN_DEPOSIT_AUSD}`}
+              label="Minimums"
+              value={`open ${PERPL_TESTNET_MIN_OPEN_AUSD} · then ${PERPL_TESTNET_MIN_DEPOSIT_AUSD}`}
             />
           </div>
           <label className="flex flex-col gap-1.5">
-            <span className="label-caps">Monto</span>
+            <span className="label-caps">Amount</span>
             <div className="flex items-center rounded-[var(--radius-field)] border border-line bg-raised focus-within:border-violet">
               <input
                 className="num w-full bg-transparent px-3 py-2.5 text-[15px] outline-none"
                 inputMode="decimal"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                aria-label="Monto"
+                aria-label="Amount"
               />
               <span className="num pr-3 text-sm text-smoke">{status.collateral.symbol}</span>
             </div>
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button className="btn btn-primary" disabled={pending} onClick={deposit}>
-              {status.account.accountId === 0n ? "Depositar y abrir" : "Depositar"}
+              {status.account.accountId === 0n ? "Deposit and open" : "Deposit"}
             </button>
             <button
               className="btn btn-outline border-short/50 text-short hover:border-short hover:bg-short/10"
               disabled={pending || status.account.accountId === 0n}
               onClick={withdraw}
             >
-              Retirar
+              Withdraw
             </button>
           </div>
           <button className="btn btn-ghost btn-sm self-start text-ash" disabled={pending} onClick={requestAusd}>
-            Pedir AUSD de prueba (faucet de Agora)
+            Request test AUSD (Agora faucet)
           </button>
         </section>
       )}
 
       {log.length > 0 && (
-        <section className="panel flex flex-col gap-2 p-4" aria-label="Actividad">
-          <h2 className="label-caps">Actividad</h2>
+        <section className="panel flex flex-col gap-2 p-4" aria-label="Activity">
+          <h2 className="label-caps">Activity</h2>
           <ol className="flex flex-col gap-1.5">
             {log.map((line, i) => (
               <LogLine key={`${i}-${line}`} line={line} />
@@ -546,7 +546,7 @@ const Check = ({ value }: { value: boolean | undefined }) =>
   value === undefined ? (
     <span className="text-smoke">—</span>
   ) : value ? (
-    <CheckCircleIcon className="inline h-5 w-5 text-long" aria-label="sí" />
+    <CheckCircleIcon className="inline h-5 w-5 text-long" aria-label="yes" />
   ) : (
     <XCircleIcon className="inline h-5 w-5 text-short" aria-label="no" />
   );
@@ -561,8 +561,8 @@ const Stat = ({ label, value, isHero = false }: { label: string; value: string; 
 /** Activity line: state dot from the verb, and any tx hash linked to the explorer. */
 const LogLine = ({ line }: { line: string }) => {
   const hash = line.match(/0x[0-9a-fA-F]{64}/)?.[0];
-  const isFail = / falló|error|no disponible/.test(line);
-  const isDone = /confirmada|cuenta delegada:|recuperada/.test(line);
+  const isFail = / failed|error|unavailable/.test(line);
+  const isDone = /confirmed|delegated account:|recovered/.test(line);
   const text = hash ? line.replace(hash, "") : line;
   return (
     <li className="flex items-start gap-2 text-xs">
