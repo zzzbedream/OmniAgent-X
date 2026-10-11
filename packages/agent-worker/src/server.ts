@@ -26,6 +26,7 @@ import { monadTestnet } from "viem/chains";
 import type { WorkerConfig } from "./config";
 import { checkAccountAccess, checkAccountOnChain, executeClose, executeGuardianAction, executePlan } from "./executor";
 import { AccountIndex } from "./accountIndex";
+import { CollateralReserve } from "./collateralReserve";
 import { GasStation } from "./gasStation";
 import { GuardianLoop, GuardianStore } from "./guardian";
 import { makePositionReader } from "./guardianChain";
@@ -73,6 +74,8 @@ function clientKey(req: IncomingMessage, trustProxy: boolean): string {
 const nowSec = () => BigInt(Math.floor(Date.now() / 1000));
 
 const RECEIPT_TIMEOUT_MS = 30_000;
+/** The station refills its collateral reserve from the faucet below this (one drip is 10,000 AUSD). */
+const RESERVE_LOW_WATER_AUSD = 2_000n;
 
 /**
  * Gas station wired to the chain. Its collateral threshold is the exchange's account-opening minimum in the
@@ -91,6 +94,47 @@ function makeGasStation(gs: NonNullable<WorkerConfig["gasStation"]>, client: Pub
     const collateral = await readCollateral(client);
     const balanceOf = (a: Address) =>
       client.readContract({ address: collateral.token, abi: erc20Abi, functionName: "balanceOf", args: [a] });
+    const unit = 10n ** BigInt(collateral.decimals);
+    const readFaucet = (functionName: "lastDripTimestamp" | "maxDripFrequency") =>
+      client.readContract({ address: AGORA_AUSD_FAUCET_TESTNET, abi: ausdFaucetAbi, functionName });
+    const reserve = new CollateralReserve({
+      // Twice the account-opening minimum, so a new user can open and still deposit once more.
+      grant: 2n * BigInt(PERPL_TESTNET_MIN_OPEN_AUSD) * unit,
+      lowWater: RESERVE_LOW_WATER_AUSD * unit,
+      maxWaitSec: 75,
+      attempts: 3,
+      deps: {
+        balance: () => balanceOf(account.address),
+        transfer: async (to, amount) =>
+          confirmed(
+            await wallet.writeContract({
+              address: collateral.token,
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [to, amount],
+            }),
+          ),
+        drip: async () => {
+          const { request } = await client.simulateContract({
+            account,
+            address: AGORA_AUSD_FAUCET_TESTNET,
+            abi: ausdFaucetAbi,
+            functionName: "requestFunds",
+            args: [account.address],
+          });
+          return confirmed(await wallet.writeContract(request));
+        },
+        nextDripAt: async () => {
+          const [last, every] = await Promise.all([readFaucet("lastDripTimestamp"), readFaucet("maxDripFrequency")]);
+          return Number(last + every);
+        },
+        nowSec: () => Math.floor(Date.now() / 1000),
+        sleep: ms => new Promise(r => setTimeout(r, ms)),
+      },
+    });
+    const topUp = () =>
+      void reserve.topUp().catch(e => console.warn(`gas station: reserve top-up failed: ${safeErrorMessage(e, 200)}`));
+    topUp();
     return new GasStation({
       dataDir,
       dripWei: gs.dripWei,
@@ -102,14 +146,11 @@ function makeGasStation(gs: NonNullable<WorkerConfig["gasStation"]>, client: Pub
         getCollateralBalance: balanceOf,
         sendMon: async (to, value) => confirmed(await wallet.sendTransaction({ to, value })),
         requestCollateral: async to => {
-          const { request } = await client.simulateContract({
-            account,
-            address: AGORA_AUSD_FAUCET_TESTNET,
-            abi: ausdFaucetAbi,
-            functionName: "requestFunds",
-            args: [to],
-          });
-          return confirmed(await wallet.writeContract(request));
+          try {
+            return await reserve.send(to);
+          } finally {
+            topUp();
+          }
         },
       },
     });

@@ -32,11 +32,13 @@ export const ASSIGN_OPERATOR_TYPES = {
 } as const;
 
 /**
- * Agora's AUSD faucet on Monad testnet (docs.agora.finance contract deployments). Another hackathon project
- * reports 10,000 AUSD per request. requestFunds(recipient) is not in the bytecode's selector list, but an
- * eth_call of it does not revert (2026-10-01): treat the call as UNVERIFIED and check the balance after it.
+ * Agora's AUSD faucet on Monad testnet (docs.agora.finance contract deployments), an upgradeable proxy.
+ * requestFunds(recipient) is in the implementation (0xba80…2a49); drips were verified on-chain by the gas station.
  */
 export const AGORA_AUSD_FAUCET_TESTNET = "0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C" as Address;
+// The faucet's limit is global, not per address (read on-chain 2026-10-11): one drip of faucetDripAmount (10,000
+// AUSD) every maxDripFrequency seconds (60) for everyone on testnet, and only to recipients holding less than
+// maxAmountToOwn (100,000 AUSD). A drip inside the window reverts with MaxFrequencyExceeded().
 export const ausdFaucetAbi = [
   {
     type: "function",
@@ -45,6 +47,10 @@ export const ausdFaucetAbi = [
     inputs: [{ name: "recipient", type: "address" }],
     outputs: [],
   },
+  { type: "function", name: "lastDripTimestamp", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "maxDripFrequency", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "faucetDripAmount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "error", name: "MaxFrequencyExceeded", inputs: [] },
 ] as const;
 
 /** Perpl testnet minimums from /v1/pub/context (2026-10-01), in AUSD: opening an account, later deposits. */

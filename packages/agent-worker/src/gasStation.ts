@@ -1,6 +1,6 @@
 // Testnet gas station. Every onboarding step is a transaction the passkey owner must send itself (the Perpl factory
 // and DelegatedAccount require msg.sender = owner), so a brand-new passkey address with 0 MON cannot even start.
-// The station sends a fixed MON drip and asks the collateral faucet for test AUSD on the owner's behalf.
+// The station sends a fixed MON drip and pays test AUSD from its own reserve (see collateralReserve.ts).
 // Abuse limits: once per address (persisted), a global daily cap, the worker's per-IP rate limit, and the owner's
 // signature (checked by the route). It uses its own key, never the operator's.
 import { join } from "node:path";

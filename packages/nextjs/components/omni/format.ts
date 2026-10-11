@@ -19,6 +19,10 @@ export function friendlyTxError(e: unknown): string {
   const raw = (e as Error)?.message ?? String(e);
   if (/exceeds the balance|insufficient funds/i.test(raw)) return "You need MON for gas on your passkey address.";
   if (/user rejected|NotAllowedError|cancel/i.test(raw)) return "Signature cancelled.";
+  if (/MaxFrequencyExceeded|0x20e5bc67/.test(raw)) {
+    return "The testnet AUSD faucet allows one request per minute for all of Monad testnet. Try again in a minute.";
+  }
+  if (/transfer amount exceeds balance|0xe450d38c/i.test(raw)) return "Not enough AUSD in your wallet.";
   return raw.split("\n")[0];
 }
 

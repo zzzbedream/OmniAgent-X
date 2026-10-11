@@ -270,6 +270,11 @@ const Onboard: NextPage = () => {
     const acc = status.account;
     // Tokens must sit in the DelegatedAccount before createAccount/depositCollateral pull them.
     const missing = amountCNS > acc.heldCollateral ? amountCNS - acc.heldCollateral : 0n;
+    if (missing > status.ownerCollateral) {
+      return push(
+        `deposit failed: your wallet has ${fmt(status.ownerCollateral)}, ${fmt(missing)} needed. Request test AUSD below.`,
+      );
+    }
     if (missing > 0n) {
       const ok = await tx("transfer collateral", () =>
         walletClient.writeContract({
@@ -304,8 +309,34 @@ const Onboard: NextPage = () => {
   };
 
   // Testnet only: Agora's faucet sends AUSD to the passkey address (the balance below shows whether it arrived).
+  // Its limit is global (one drip per minute for all of testnet), so wait for the window instead of reverting.
   const requestAusd = async () => {
     if (!walletClient || !account) return;
+    setPending(true);
+    try {
+      const [last, every, block] = await Promise.all([
+        publicClient.readContract({
+          address: AGORA_AUSD_FAUCET_TESTNET,
+          abi: ausdFaucetAbi,
+          functionName: "lastDripTimestamp",
+        }),
+        publicClient.readContract({
+          address: AGORA_AUSD_FAUCET_TESTNET,
+          abi: ausdFaucetAbi,
+          functionName: "maxDripFrequency",
+        }),
+        publicClient.getBlock(),
+      ]);
+      const wait = Number(last + every - block.timestamp) + 1;
+      if (wait > 0) {
+        push(`test AUSD: the faucet is shared by all of testnet, waiting ${wait} s for it`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+      }
+    } catch {
+      // Reading the window is only an optimization; the request below still reports its own error.
+    } finally {
+      setPending(false);
+    }
     await tx("request test AUSD", () =>
       walletClient.writeContract({
         address: AGORA_AUSD_FAUCET_TESTNET,

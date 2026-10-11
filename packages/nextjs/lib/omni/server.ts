@@ -24,7 +24,10 @@ export const expectedOperator =
 export async function assertEligibleAccount(caller: { owner: Address; account: Address }): Promise<void> {
   const acc = await readDelegatedAccount(serverClient, caller.account, expectedOperator);
   if (acc.owner !== caller.owner) throw new Error("signer does not own this DelegatedAccount");
-  if (acc.accountId === 0n) throw new Error("DelegatedAccount has no exchange account (deposit first)");
+  if (acc.accountId === 0n)
+    throw new Error(
+      "your trading account has no funds on the exchange yet: deposit at least 100 AUSD in Account first",
+    );
   if (!acc.ownsExchangeAccount) throw new Error("the exchange account does not belong to this DelegatedAccount");
   if (expectedOperator && !acc.isOperator) throw new Error("this app's agent is not an operator of the account");
 }
