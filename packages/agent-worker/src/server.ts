@@ -213,6 +213,9 @@ export function createWorker(cfg: WorkerConfig) {
   });
   const guardianInfo = { intervalMs: cfg.guardianIntervalMs, addCollateralEnabled: cfg.guardianAddCollateral };
   const gasStation = cfg.gasStation ? makeGasStation(cfg.gasStation, client, cfg.rpcUrl, cfg.dataDir) : undefined;
+  // Build the station at boot so its collateral reserve fills before the first new user arrives (a failed build
+  // is retried on the next request).
+  void gasStation?.station().catch(e => console.warn(`gas station: not ready: ${safeErrorMessage(e, 200)}`));
   const accountIndex =
     cfg.accountIndexFromBlock === undefined
       ? undefined
