@@ -2,7 +2,7 @@
 
 // Phase 1 onboarding: passkey (Mera) → Perpl DelegatedAccount with the worker as operator → deposit → withdraw.
 // Every write is signed by the passkey-derived owner key; the operator can never withdraw.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AGORA_AUSD_FAUCET_TESTNET,
   APPROVAL_DOMAIN,
@@ -54,6 +54,10 @@ const Onboard: NextPage = () => {
   const [log, setLog] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [fundState, setFundState] = useState<"idle" | "running" | "done">("idle");
+  // Async flows ask for a re-read through this counter: calling `refresh` from their closure would use the state from
+  // when they started (e.g. before the trading account existed) and overwrite the fresh status with it.
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(() => setTick(t => t + 1), []);
   /** Progress of the agent-permission setup that follows account creation. */
   const [setup, setSetup] = useState<{ done: number; total: number }>();
 
@@ -62,8 +66,10 @@ const Onboard: NextPage = () => {
     [],
   );
 
+  const latestRead = useRef(0);
   const refresh = useCallback(async () => {
     if (!account) return;
+    const read = ++latestRead.current;
     try {
       const [monBalance, collateral, health] = await Promise.all([
         publicClient.getBalance({ address: account.address }),
@@ -90,6 +96,8 @@ const Onboard: NextPage = () => {
         ]);
         acc = { ...info, address: delegated, heldCollateral, allowlistDrift };
       }
+      // Reads overlap (polling, actions); only the latest may write, or an older one would show stale state.
+      if (read !== latestRead.current) return;
       setStatus({
         monBalance,
         collateral,
@@ -123,7 +131,7 @@ const Onboard: NextPage = () => {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, tick]);
 
   // A brand-new passkey address has no MON, so it cannot send the first onboarding transaction (the Perpl
   // contracts require the owner as sender). Ask the worker's testnet gas station once, as soon as it is seen.
@@ -147,9 +155,9 @@ const Onboard: NextPage = () => {
       push(`test funds failed: ${friendlyTxError(e)}`);
     } finally {
       setFundState("done");
-      void refresh();
+      reload();
     }
-  }, [account, walletClient, refresh, push]);
+  }, [account, walletClient, reload, push]);
 
   useEffect(() => {
     if (fundState === "idle" && status && status.monBalance < LOW_GAS_WEI) void requestTestFunds();
@@ -170,7 +178,7 @@ const Onboard: NextPage = () => {
       return undefined;
     } finally {
       setPending(false);
-      if (!quiet) void refresh();
+      if (!quiet) reload();
     }
   };
 
@@ -252,7 +260,7 @@ const Onboard: NextPage = () => {
       push(`agent permissions: confirmed (${changes.length} updates)`);
     } finally {
       setSetup(undefined);
-      void refresh();
+      reload();
     }
   };
 
